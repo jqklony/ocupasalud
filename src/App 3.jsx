@@ -272,16 +272,6 @@ const _SB_SERVICE_KEY = _cfgSafeKey(_cfgRaw.sbServiceKey) || null; // null = sol
 // En producción inyectar via: <script>window.__SISO_CONFIG={sbUrl:'TU_URL',sbKey:'TU_KEY'};</script>
 // Las claves se configuran en el primer despliegue y se rotan cada 90 días - NUNCA en código fuente.
 // Gestión de sesión - expiración automática por inactividad (30 min)
-const _SESSION_TIMEOUT_MS = 30 * 60 * 1000;
-let _sessionTimer = null;
-const _resetSessionTimer = (logoutFn) => {
-  if (_sessionTimer) clearTimeout(_sessionTimer);
-  if (typeof logoutFn === "function") {
-    _sessionTimer = setTimeout(() => {
-      logoutFn();
-    }, _SESSION_TIMEOUT_MS);
-  }
-};
 // Headers con soporte para proxy o Supabase directo
 const _SB_HEADERS = {
   apikey: _SB_KEY,
@@ -604,15 +594,15 @@ const _secretariaMedicoAsignado = (currentUser, medicoId, usersList) => {
 
 // _sbSet: ahora usa _securePost que soporta proxy (prod) o Supabase directo (dev/piloto)
 // SEC-07: Rate limiter simple para requests a Supabase
-const _rl = { count: 0, reset: Date.now() + 60000 };
+const _sbRl = { count: 0, reset: Date.now() + 60000 };
 const _rlCheck = () => {
   const now = Date.now();
-  if (now > _rl.reset) {
-    _rl.count = 0;
-    _rl.reset = now + 60000;
+  if (now > _sbRl.reset) {
+    _sbRl.count = 0;
+    _sbRl.reset = now + 60000;
   }
-  _rl.count++;
-  if (_rl.count > 120) {
+  _sbRl.count++;
+  if (_sbRl.count > 120) {
     console.warn("[SISO SEC] Rate limit alcanzado");
     return false;
   }
