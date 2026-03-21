@@ -57,6 +57,88 @@ import {
   Download,
   Upload,
 } from "lucide-react";
+
+// ============================================================
+// SECURITY UTILITIES v1.0 - OcupaSalud
+// ============================================================
+
+// SEC-U1: Sanitización de inputs para prevenir XSS
+const sanitizeInput = (str) => {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;')
+    .trim();
+};
+
+// SEC-U2: Validación fuerte de contraseña
+const validatePasswordStrength = (password) => {
+  const errors = [];
+  if (!password || password.length < 8) errors.push('Mínimo 8 caracteres');
+  if (!/[A-Z]/.test(password)) errors.push('Al menos una mayúscula');
+  if (!/[a-z]/.test(password)) errors.push('Al menos una minúscula');
+  if (!/[0-9]/.test(password)) errors.push('Al menos un número');
+  return { valid: errors.length === 0, errors };
+};
+
+// SEC-U3: Logger de auditoría
+const _auditLog = (action, user, detail = '') => {
+  try {
+    const logs = JSON.parse(localStorage.getItem('siso_audit_log') || '[]');
+    logs.push({
+      ts: new Date().toISOString(),
+      action: sanitizeInput(String(action)),
+      user: sanitizeInput(String(user || 'anonymous')),
+      detail: sanitizeInput(String(detail)),
+      ua: navigator.userAgent.substring(0, 80),
+    });
+    // Mantener solo los últimos 200 registros
+    if (logs.length > 200) logs.splice(0, logs.length - 200);
+    localStorage.setItem('siso_audit_log', JSON.stringify(logs));
+  } catch (_) {}
+};
+
+// SEC-U4: Rate limiting de login (max 5 intentos, bloqueo 15 min)
+const _rl = {
+  maxAttempts: 5,
+  blockMinutes: 15,
+  getKey: () => 'siso_rl_login',
+  get: () => { try { return JSON.parse(localStorage.getItem('siso_rl_login') || '{"attempts":0,"blockedUntil":0}'); } catch(_){ return {attempts:0,blockedUntil:0}; } },
+  set: (data) => { try { localStorage.setItem('siso_rl_login', JSON.stringify(data)); } catch(_){} },
+  isBlocked: () => { const d = _rl.get(); return d.blockedUntil && Date.now() < d.blockedUntil; },
+  getRemainingMs: () => { const d = _rl.get(); return Math.max(0, d.blockedUntil - Date.now()); },
+  getRemainingMin: () => Math.ceil(_rl.getRemainingMs() / 60000),
+  recordFailure: () => {
+    const d = _rl.get();
+    d.attempts = (d.attempts || 0) + 1;
+    if (d.attempts >= _rl.maxAttempts) {
+      d.blockedUntil = Date.now() + _rl.blockMinutes * 60000;
+      d.attempts = 0;
+    }
+    _rl.set(d);
+  },
+  reset: () => _rl.set({attempts: 0, blockedUntil: 0}),
+  getAttempts: () => _rl.get().attempts || 0,
+};
+
+// SEC-U5: Timeout de sesión inactiva (30 minutos)
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+let _sessionTimer = null;
+const _resetSessionTimer = (logoutCallback) => {
+  if (_sessionTimer) clearTimeout(_sessionTimer);
+  _sessionTimer = setTimeout(() => {
+    if (logoutCallback) logoutCallback();
+  }, SESSION_TIMEOUT_MS);
+};
+const _clearSessionTimer = () => {
+  if (_sessionTimer) { clearTimeout(_sessionTimer); _sessionTimer = null; }
+};
+
+// ============================================================
 // ==========================================
 // MÓDULO 0: STORAGE PERSISTENTE
 // FIX C-02: localStorage para datos clínicos (persiste entre sesiones)
@@ -186,22 +268,10 @@ const _SB_KEY =
 // Para configurar: en index.html agregar antes del bundle:
 //   <script>window.__SISO_CONFIG={sbUrl:'...',sbKey:'...',sbServiceKey:'TU_SERVICE_KEY'};</script>
 const _SB_SERVICE_KEY = _cfgSafeKey(_cfgRaw.sbServiceKey) || null; // null = solo lectura (seguro por defecto)
-// ⚠️  CREDENCIALES ACTUALES (para acceso inicial - rotar después de primer despliegue):
-// URL : https://yqrrktrgoijgzccrxnpz.supabase.co
-// KEY : sb_publishable_K88qYuJ9wsWjQqnIhLVK7Q_NroFvPI7
-// LOGIN ADMINISTRADOR: usuario=drcucalon  contraseña=Siso2025*
-// En producción inyectar via: <script>window.__SISO_CONFIG={sbUrl:'...',sbKey:'...'};</script>
+// SEC-FIX-01: Credenciales removidas del código fuente (OWASP A07 - Hardcoded Credentials)
+// En producción inyectar via: <script>window.__SISO_CONFIG={sbUrl:'TU_URL',sbKey:'TU_KEY'};</script>
+// Las claves se configuran en el primer despliegue y se rotan cada 90 días - NUNCA en código fuente.
 // Gestión de sesión - expiración automática por inactividad (30 min)
-const _SESSION_TIMEOUT_MS = 30 * 60 * 1000;
-let _sessionTimer = null;
-const _resetSessionTimer = (logoutFn) => {
-  if (_sessionTimer) clearTimeout(_sessionTimer);
-  if (typeof logoutFn === "function") {
-    _sessionTimer = setTimeout(() => {
-      logoutFn();
-    }, _SESSION_TIMEOUT_MS);
-  }
-};
 // Headers con soporte para proxy o Supabase directo
 const _SB_HEADERS = {
   apikey: _SB_KEY,
@@ -524,15 +594,15 @@ const _secretariaMedicoAsignado = (currentUser, medicoId, usersList) => {
 
 // _sbSet: ahora usa _securePost que soporta proxy (prod) o Supabase directo (dev/piloto)
 // SEC-07: Rate limiter simple para requests a Supabase
-const _rl = { count: 0, reset: Date.now() + 60000 };
+const _sbRl = { count: 0, reset: Date.now() + 60000 };
 const _rlCheck = () => {
   const now = Date.now();
-  if (now > _rl.reset) {
-    _rl.count = 0;
-    _rl.reset = now + 60000;
+  if (now > _sbRl.reset) {
+    _sbRl.count = 0;
+    _sbRl.reset = now + 60000;
   }
-  _rl.count++;
-  if (_rl.count > 120) {
+  _sbRl.count++;
+  if (_sbRl.count > 120) {
     console.warn("[SISO SEC] Rate limit alcanzado");
     return false;
   }
@@ -773,6 +843,14 @@ const _sanitize = (str) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#x27;")
     .replace(/\//g, "&#x2F;");
+// SEC-FIX-02: Validación estricta de URL para imágenes (previene XSS via javascript: protocol)
+// OWASP A03: Injection - solo permite data:image/, https:// y http:// (CWE-79)
+const _safeLogoUrl = (url) => {
+  if (!url) return "";
+  const u = String(url).trim();
+  if (u.startsWith("data:image/") || u.startsWith("https://") || u.startsWith("http://")) return u;
+  return ""; // Rechaza javascript:, vbscript:, file://, etc.
+};
 // ── HELPER: Columna izquierda para cabeceras de documentos impresos ──────────
 // Si se pasa ipsData (objeto empresa), muestra logo+nombre+NIT+dirección de la IPS.
 // Si ipsData es null, muestra los datos del médico (docData).
@@ -787,7 +865,7 @@ const _ipsDocLeftHtml = (ipsData, docData, accentSafe) => {
     const tel = _sanitize(ipsData.telefono || "");
     const mail = _sanitize(ipsData.correo || "");
     const lema = _sanitize(ipsData.lema || "");
-    const logo = ipsData.logo || "";
+    const logo = _safeLogoUrl(ipsData.logo || ""); // SEC-FIX-02: validar URL logo
     const logoHtml = logo
       ? `<img src="${logo}" style="max-height:42px;max-width:100px;object-fit:contain;display:block;margin-bottom:4px;" />`
       : "";
@@ -5864,7 +5942,7 @@ const CIE11Badge = ({ cie10value }) => {
   );
 };
 // MÓDULO CUPS: Código Único de Procedimientos en Salud - Colombia
-// Fuente: Res. 5265/1994 (actualizada), MinSalud Colombia
+// Fuente: Res. 2175/2015 MSPS (consolida CUPS, deroga Res. 2175/2015), actualizada 2024
 // Procedimientos frecuentes en Salud Ocupacional y Medicina General
 // Ref. legal: Res. 2275/2023 (RIPS), Res. 1843/2025
 // ==========================================
@@ -6429,7 +6507,7 @@ const CUPSInput = ({ value, onChange, placeholder, className }) => {
               borderTop: "1px solid #e5e7eb",
             }}
           >
-            {sugerencias.length} resultado(s) · CUPS Colombia · Res. 5265/1994
+            {sugerencias.length} resultado(s) · CUPS Colombia · Res. 2175/2015
             actualizada · MinSalud
           </div>
         </div>
@@ -7499,7 +7577,14 @@ const initialUsers = [
     licenseStarted: "2026-01-01",
     porcentajeHonorarios: 100, // FASE 2: hook distribución futura (Componente 10)
     secretariaPermisos: { ...SECRETARIA_PERMISOS_DEFAULT },
-    doctorData: { ...DEFAULT_DOCTOR_DATA },
+    // Perfil del super_admin - aparece en navbar, certificados y firmas
+    doctorData: {
+      ...DEFAULT_DOCTOR_DATA,
+      nombre: "Dr. Julian Cucalon",
+      titulo: "Médico Especialista en Salud Ocupacional",
+      ciudad: "Popayán",
+      // licencia, cedula, celular, email: se configuran en Ajustes → Firma
+    },
   },
 ];
 const initialCompanyState = {
@@ -7763,6 +7848,8 @@ const DoctorSignature = ({ signature, data, showData = true }) => {
     </div>
   );
 };
+// PERF-02: memo evita re-render cuando signature/data no cambian (se usa en ~15 lugares)
+const DoctorSignatureMemo = React.memo(DoctorSignature);
 // BrandLogo: logotipo compacto para cabecera de documentos
 const BrandLogo = ({ data }) => {
   const doc = data || DEFAULT_DOCTOR_DATA;
@@ -9662,7 +9749,7 @@ const TabFormulaDerivacion = ({
           const ipsTel = _sanitize(miIPS.telefono || "");
           const ipsEmail = _sanitize(miIPS.correo || "");
           const ipsLema = _sanitize(miIPS.lema || "");
-          const ipsLogo = miIPS.logo || "";
+          const ipsLogo = _safeLogoUrl(miIPS.logo || ""); // SEC-FIX-02
           const logoHtml = ipsLogo
             ? `<img src="${ipsLogo}" style="max-height:40px;max-width:90px;object-fit:contain;display:block;margin-bottom:4px;" />`
             : "";
@@ -10772,9 +10859,14 @@ function LoginForm({ onLogin, blockedUntil, attempts }) {
     return () => clearInterval(t);
   }, [blockedUntil]);
   const isBlocked = blockedUntil && Date.now() < blockedUntil;
+  // SEC-FIX-03: Limitar longitud de inputs para prevenir DoS y fuzzing (CWE-400)
+  const MAX_USER_LEN = 64;
+  const MAX_PASS_LEN = 128;
   const submit = () => {
     if (isBlocked) return;
-    if (u.trim() && p.trim()) onLogin(u.trim(), p.trim());
+    const user = u.trim().slice(0, MAX_USER_LEN);
+    const pass = p.trim().slice(0, MAX_PASS_LEN);
+    if (user && pass) onLogin(user, pass);
   };
   return (
     <div className="space-y-4 mb-6">
@@ -10797,21 +10889,23 @@ function LoginForm({ onLogin, blockedUntil, attempts }) {
       )}
       <input
         value={u}
-        onChange={(e) => setU(e.target.value)}
+        onChange={(e) => setU(e.target.value.slice(0, MAX_USER_LEN))}
         className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-400 outline-none"
         placeholder="Usuario"
         onKeyDown={(e) => e.key === "Enter" && submit()}
         autoComplete="username"
+        maxLength={MAX_USER_LEN}
         disabled={isBlocked}
       />
       <input
         type="password"
         value={p}
-        onChange={(e) => setP(e.target.value)}
+        onChange={(e) => setP(e.target.value.slice(0, MAX_PASS_LEN))}
         className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-400 outline-none"
         placeholder="Contraseña"
         onKeyDown={(e) => e.key === "Enter" && submit()}
         autoComplete="current-password"
+        maxLength={MAX_PASS_LEN}
         disabled={isBlocked}
       />
       <button
@@ -10830,7 +10924,7 @@ function LoginForm({ onLogin, blockedUntil, attempts }) {
 }
 // ══════════════════════════════════════════════════════════
 // MÓDULO NORMATIVO 1: AVISO DE PRIVACIDAD (Ley 1581/2012)
-// Decreto 1377/2013 Art. 10 - Tratamiento datos sensibles
+// Decreto 1078/2015 Art. 2.2.2.25.2.2 - Tratamiento datos sensibles (deroga Decreto 1377/2013)
 // ══════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -11276,7 +11370,8 @@ const _generarCertificadoHTMLNormalizado = (
   signature,
   ipsData
 ) => {
-  const fechaHoy = new Date().toLocaleDateString("es-CO", {
+const _dateRef = data.fechaCierre ? new Date(data.fechaCierre + "T12:00:00") : new Date();
+  const fechaHoy = _dateRef.toLocaleDateString("es-CO", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -11436,8 +11531,8 @@ const _generarCertificadoHTMLNormalizado = (
     '<div class="hdr">' +
     '<div class="hdr-brand">' +
     (ipsData
-      ? ipsData.logo
-        ? `<img src="${ipsData.logo}" style="max-height:44px;max-width:100px;object-fit:contain;margin-right:8px;" />`
+      ? _safeLogoUrl(ipsData.logo || "") // SEC-FIX-02
+        ? `<img src="${_safeLogoUrl(ipsData.logo)}" style="max-height:44px;max-width:100px;object-fit:contain;margin-right:8px;" />`
         : '<div class="hdr-logo">IPS</div>'
       : '<div class="hdr-logo">+</div>') +
     '<div><div class="hdr-name">' +
@@ -11513,22 +11608,14 @@ const _generarCertificadoHTMLNormalizado = (
     /* ── RECOMENDACIONES ────────────────────────────────────── */
     (recomendacionesText || recCheck.length > 0
       ? '<div class="sec"><div class="sec-title">Recomendaciones</div>' +
-        (recCheck.length > 0
-          ? recCheck
-              .map((r) => '<span class="pill ok">✓ ' + r + "</span>")
-              .join("")
-          : "") +
+        "" +
         fmtBlocks(recomendacionesText) +
         "</div>"
       : "") +
     /* ── RESTRICCIONES ──────────────────────────────────────── */
     (restriccionesText || restCheck.length > 0
       ? '<div class="sec"><div class="sec-title">Restricciones Laborales</div>' +
-        (restCheck.length > 0
-          ? restCheck
-              .map((r) => '<span class="pill">⚠ ' + r + "</span>")
-              .join("")
-          : "") +
+        "" +
         fmtBlocks(restriccionesText) +
         "</div>"
       : "") +
@@ -12077,7 +12164,7 @@ const PrivacyModal = ({ onAccept }) => (
               Política de Privacidad y Tratamiento de Datos
             </h2>
             <p className="text-blue-100 text-[11px] font-medium">
-              Ley 1581 de 2012 · Decreto 1377 de 2013
+              Ley 1581 de 2012 · Decreto 1078 de 2015
             </p>
           </div>
         </div>
@@ -12359,7 +12446,17 @@ export default function App() {
         // Verificar que el usuario sigue existiendo en la lista guardada
         const users = JSON.parse(_ls.getItem("siso_users") || "[]");
         const found = users.find((u) => u.user === sess.user);
-        return found || null;
+        if (!found) return null;
+        // Migración: si doctorData.nombre está vacío, rellenar desde initialUsers (no sobreescribir datos ya guardados)
+        const init = initialUsers.find((i) => i.user === found.user);
+        if (init && init.doctorData?.nombre && !found.doctorData?.nombre) {
+          // Usar init como base, sobreescribir solo con valores no vacíos del stored
+          const mergedDoc = Object.fromEntries(
+            Object.entries(init.doctorData).map(([k, v]) => [k, found.doctorData?.[k] || v])
+          );
+          return { ...found, doctorData: mergedDoc };
+        }
+        return found;
       }
     } catch {}
     return null;
@@ -12479,6 +12576,9 @@ export default function App() {
   const [isGeneratingRestr, setIsGeneratingRestr] = useState(false);
   const [isGeneratingReco, setIsGeneratingReco] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
+  // ── GUARD: cambios sin guardar en HC ─────────────────────────────────────
+  const [_hcDirty, _setHcDirty] = useState(false);
+  const [_exitHcConfirm, _setExitHcConfirm] = useState(null); // { onProceed }
   const [patientSuggestions, setPatientSuggestions] = useState([]);
   const [historyNotification, setHistoryNotification] = useState(null);
   const [showRestriccionesPanel, setShowRestriccionesPanel] = useState(false);
@@ -12785,6 +12885,7 @@ export default function App() {
   // B-24: Portal del Trabajador
   const [portalCodigo, setPortalCodigo] = useState("");
   const [portalPaciente, setPortalPaciente] = useState(null);
+  const [portalMultiple, setPortalMultiple] = useState([]); // múltiples HCs por cédula
   // B-21: Diagnóstico Epidemiológico
   const [epiEmpresa, setEpiEmpresa] = useState("todas");
   const [epiPeriodo, setEpiPeriodo] = useState("anio");
@@ -12917,6 +13018,7 @@ export default function App() {
   const [portalEmpresaPacientes, setPortalEmpresaPacientes] = useState([]);
   const [portalEmpresaTab, setPortalEmpresaTab] = useState("trabajadores");
   const [portalEmpresaBuscando, setPortalEmpresaBuscando] = useState(false);
+  const [portalEmpresaFiltroDoc, setPortalEmpresaFiltroDoc] = useState(""); // filtro cédula en portal empresa
   const [portalActivadoInfo, setPortalActivadoInfo] = useState(null); // {empresa, portalCode} post-activación
   // ── PORTAL EMPRESA ADMIN (FASE 2) ──
   const [portalEmpresaAdmin, setPortalEmpresaAdmin] = useState(null); // empresa admin logueado
@@ -12944,6 +13046,30 @@ export default function App() {
   const [ipsEditingEmpId, setIpsEditingEmpId] = useState(null);
   const activeDoctorData = currentUser?.doctorData || DEFAULT_DOCTOR_DATA;
   const activeSignature = currentUser?.doctorData?.signature || doctorSignature;
+  // ── Bloque 4-A: useMemo para cómputos costosos (bajo rendimiento) ─────────
+  const _memoPatients = React.useMemo(() => patientsList, [patientsList]);
+  const _memoCompanies = React.useMemo(() => companies, [companies]);
+  const _memoBills = React.useMemo(() => savedBillsList, [savedBillsList]);
+  const _memoReports = React.useMemo(() => savedReports, [savedReports]);
+  const _memoPatientsCount = React.useMemo(() => patientsList.length, [patientsList]);
+  const _memoClosedHCs = React.useMemo(
+    () => patientsList.filter(p => p.estadoHistoria === "Cerrada" && !p._archivado),
+    [patientsList]
+  );
+  // Debounce ref para guardado de caja (evita escrituras en cada keystroke)
+  const _cajaSaveTimer = useRef(null);
+  const saveCajaDebounced = React.useCallback((movs) => {
+    if (_cajaSaveTimer.current) clearTimeout(_cajaSaveTimer.current);
+    _cajaSaveTimer.current = setTimeout(() => {
+      try {
+        const suf = currentUser?.empresaId
+          ? "empresa_" + currentUser.empresaId
+          : currentUser?.user || "shared";
+        localStorage.setItem(`siso_caja_${suf}`, JSON.stringify(movs));
+        _sbSet(`siso_caja_movs_${suf}`, movs);
+      } catch {}
+    }, 800);
+  }, [currentUser]);
   const showAlert = (msg) => setAlertMsg(msg);
   const showConfirm = (msg, onConfirm) => setConfirmConfig({ msg, onConfirm });
   const showPrompt = (msg, onSubmit, type = "text") => {
@@ -13014,12 +13140,155 @@ export default function App() {
   //   Content-Security-Policy: script-src 'self' 'unsafe-inline' 'unsafe-eval' ...
   // Solo X-Frame-Options se mantiene (es seguro y no interfiere con nada).
   useEffect(() => {
+    // SEC-FIX-08a: X-Frame-Options - previene clickjacking (CWE-1021)
     if (!document.querySelector('meta[http-equiv="X-Frame-Options"]')) {
       const xfo = document.createElement("meta");
       xfo.httpEquiv = "X-Frame-Options";
       xfo.content = "SAMEORIGIN";
       document.head.appendChild(xfo);
     }
+    // SEC-FIX-08b: Referrer-Policy - no expone URL en peticiones externas (CWE-200)
+    if (!document.querySelector('meta[name="referrer"]')) {
+      const rp = document.createElement("meta");
+      rp.name = "referrer";
+      rp.content = "strict-origin-when-cross-origin";
+      document.head.appendChild(rp);
+    }
+    // SEC-FIX-08c: Permissions-Policy - restringe APIs del navegador no usadas
+    if (!document.querySelector('meta[http-equiv="Permissions-Policy"]')) {
+      const pp = document.createElement("meta");
+      pp.httpEquiv = "Permissions-Policy";
+      pp.content = "geolocation=(), microphone=(), camera=(), payment=()";
+      document.head.appendChild(pp);
+    }
+  }, []);
+  // ── PERF-01: CSS Global — Print + Mobile + content-visibility ─────────────
+  useEffect(() => {
+    if (document.getElementById("siso-perf-styles")) return;
+    const style = document.createElement("style");
+    style.id = "siso-perf-styles";
+    style.textContent = `
+      /* ── PRINT: evitar texto cortado en historias clínicas ── */
+      @media print {
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        body { font-size: 9pt !important; }
+
+        /* Todos los contenedores de texto: wrap completo, nunca cortar */
+        p, span, div, td, th, li, label, input, textarea, pre {
+          word-wrap: break-word !important;
+          overflow-wrap: break-word !important;
+          white-space: pre-wrap !important;
+          overflow: visible !important;
+          max-width: 100% !important;
+        }
+
+        /* Tablas: 100% ancho, sin overflow */
+        table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; }
+        td, th { word-break: break-word !important; overflow-wrap: break-word !important; vertical-align: top !important; padding: 3px 5px !important; }
+
+        /* Secciones que NO deben cortarse entre páginas */
+        .no-break-inside, section, article, .rounded-2xl, .rounded-xl, .bg-white {
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+
+        /* Grids y flex en columna única para impresión */
+        .grid, .grid-cols-2, .grid-cols-3, .grid-cols-4 {
+          display: block !important;
+        }
+
+        /* Ocultar elementos no imprimibles */
+        .no-print, button:not(.print-btn), nav, [class*="no-print"] {
+          display: none !important;
+        }
+
+        /* Asegurar que el contenido de textareas se vea completo */
+        textarea, [contenteditable] {
+          height: auto !important;
+          min-height: unset !important;
+          overflow: visible !important;
+          white-space: pre-wrap !important;
+        }
+
+        /* Campos de formulario visibles */
+        input[type="text"], input[type="date"], select {
+          border: none !important;
+          border-bottom: 1px solid #ccc !important;
+          padding: 0 !important;
+        }
+
+        /* Saltos de página antes de secciones principales */
+        .page-break-before { page-break-before: always !important; }
+
+        /* Tamaño de página */
+        @page { size: letter portrait; margin: 1.5cm; }
+      }
+
+      /* ── MOBILE: responsive para Android e iOS ── */
+      @media (max-width: 768px) {
+        /* Navbar compacta */
+        nav { flex-wrap: wrap !important; gap: 4px !important; padding: 8px !important; }
+        nav button, nav a { font-size: 11px !important; padding: 6px 8px !important; }
+
+        /* Formularios en columna única */
+        .grid-cols-2, .grid-cols-3, .grid-cols-4 {
+          grid-template-columns: 1fr !important;
+        }
+
+        /* Tablas scroll horizontal */
+        table { display: block !important; overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+
+        /* Touch targets mínimo 44px (Apple HIG / WCAG 2.5.5) */
+        button, a, [role="button"], input[type="submit"] {
+          min-height: 44px !important;
+          min-width: 44px !important;
+        }
+
+        /* Texto legible en mobile */
+        body, p, span, td, th { font-size: 14px !important; line-height: 1.5 !important; }
+        h1 { font-size: 20px !important; }
+        h2 { font-size: 17px !important; }
+        h3 { font-size: 15px !important; }
+
+        /* Contenedores: ancho completo sin overflow */
+        .max-w-4xl, .max-w-5xl, .max-w-6xl, .max-w-7xl {
+          max-width: 100% !important;
+          padding-left: 12px !important;
+          padding-right: 12px !important;
+        }
+
+        /* Modales ocupan pantalla completa */
+        .fixed.inset-0 > div { width: 96vw !important; max-width: 96vw !important; margin: 0 auto !important; }
+
+        /* Inputs más grandes para touch */
+        input, select, textarea {
+          font-size: 16px !important; /* Evita zoom automático en iOS */
+          padding: 10px 12px !important;
+        }
+      }
+
+      /* ── EXTRA SMALL: teléfonos 360px ── */
+      @media (max-width: 480px) {
+        .grid-cols-2 { grid-template-columns: 1fr !important; }
+        .flex.gap-2, .flex.gap-3 { flex-wrap: wrap !important; }
+        .text-xs { font-size: 12px !important; }
+        .px-4 { padding-left: 10px !important; padding-right: 10px !important; }
+      }
+
+      /* ── PERF: content-visibility para carga inicial rápida ── */
+      /* Solo aplica a secciones que no están visibles al inicio */
+      .siso-lazy-section {
+        content-visibility: auto;
+        contain-intrinsic-size: 0 400px;
+      }
+
+      /* Smooth scrolling nativo (sin JS) */
+      html { scroll-behavior: smooth; }
+
+      /* Evitar parpadeo/reflow en imágenes */
+      img { max-width: 100%; height: auto; }
+    `;
+    document.head.appendChild(style);
   }, []);
   // Load desde localStorage (inmediato) + Supabase (en background, gana si más reciente)
   useEffect(() => {
@@ -13042,11 +13311,14 @@ export default function App() {
     const storedUsers = sp("siso_users", null);
     if (storedUsers && Array.isArray(storedUsers)) {
       const fixed = storedUsers.map((u) => {
-        if (!u.passHash) {
-          const init = initialUsers.find((i) => i.user === u.user);
-          return init
-            ? { ...u, passHash: init.passHash, mustChangePassword: true }
-            : u;
+        const init = initialUsers.find((i) => i.user === u.user);
+        // Recuperar passHash vacío
+        if (!u.passHash && init) {
+          return { ...u, passHash: init.passHash, mustChangePassword: true };
+        }
+        // Migración: si doctorData.nombre está vacío, rellenar desde initialUsers (primera carga)
+        if (init && init.doctorData?.nombre && !u.doctorData?.nombre) {
+          return { ...u, doctorData: { ...init.doctorData, ...(u.doctorData || {}) } };
         }
         return u;
       });
@@ -13185,6 +13457,13 @@ export default function App() {
     }, 120000); // 2 minutos
     return () => clearInterval(timer);
   }, [currentUser, view, data, patientsList]);
+  // ── BEFOREUNLOAD: advertir al recargar/cerrar pestaña con HC sucia ────────
+  useEffect(() => {
+    if (!_hcDirty || view !== "historia") return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [_hcDirty, view]);
   // Auto-IMC
   useEffect(() => {
     if (data.peso && data.talla) {
@@ -13232,6 +13511,16 @@ export default function App() {
         ];
         if (doctorSignature)
           tasks.push(_sbSet("siso_doctor_signature", doctorSignature));
+        // Bloque 3: módulos que antes solo vivían en localStorage
+        const _u = currentUser?.user || "shared";
+        if (cajaMovimientos?.length)
+          tasks.push(_sbSet(`siso_caja_movs_${_u}`, cajaMovimientos));
+        if (arlGuardados?.length)
+          tasks.push(_sbSet(`siso_arl_${_u}`, arlGuardados));
+        if (teleconsultas?.length)
+          tasks.push(_sbSet(`siso_teleconsultas_${_u}`, teleconsultas));
+        if (habeasRequests?.length)
+          tasks.push(_sbSet(`siso_habeas_${_u}`, habeasRequests));
         // API keys del usuario actual
         const currentKeys = sps("siso_ai_keys", aiConfig.keys || {});
         if (currentUser?.user)
@@ -13258,6 +13547,10 @@ export default function App() {
     aiConfig,
     doctorSignature,
     propForm,
+    cajaMovimientos,
+    arlGuardados,
+    teleconsultas,
+    habeasRequests,
   ]);
   // ── PERSISTENCIA DE SESIÓN: guarda estado completo en localStorage ────────
   useEffect(() => {
@@ -13831,6 +14124,7 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setData((p) => ({ ...p, [name]: type === "checkbox" ? checked : value }));
+    if (view === "historia") _setHcDirty(true);
   };
   // ── GUARDADO MANUAL EN NUBE CON REPORTE ─────────────────────────────────
   const handleManualCloudSave = async () => {
@@ -13908,7 +14202,16 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
     _ls.setItem("siso_ai_config_version", "v3");
     showAlert("✅ Configuración de IA guardada en la nube.");
   };
-  const handleLogin = (u, p) => {
+  
+const handleLogin = (u, p) => {
+    // SEC: Rate limiting - verificar bloqueo
+    if (_rl.isBlocked()) {
+      showAlert(`⛔ Demasiados intentos fallidos. Intente de nuevo en ${_rl.getRemainingMin()} minuto(s).`);
+      return;
+    }
+
+  
+// ============================================================
     // FIX C-01: SOLO comparar contra passHash (SHA-256) - eliminado fallback texto plano
     _sha256(p).then(async (hash) => {
       // Migración automática: si el usuario tiene .pass en texto plano (versión anterior),
@@ -13936,6 +14239,30 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
           }
         }
       }
+                // CAMBIO 7 - SEC: Fallback a Supabase si usuario no hallado en lista local
+                          // Resuelve el caso de nuevo dispositivo / caché borrado / contraseña cambiada
+                                    if (!found) {
+                                                  const cloudData = await _sbGetAll();
+                                                              if (cloudData?.["siso_users"]?.value && Array.isArray(cloudData["siso_users"].value)) {
+                                                                              const cloudUserList = cloudData["siso_users"].value;
+                                                                                            // Sincronizar lista local con datos de Supabase
+                                                                                                          setUsersList(prev => {
+                                                                                                                            const merged = [...prev];
+                                                                                                                                            cloudUserList.forEach(cu => {
+                                                                                                                                                                if (!merged.find(m => m.user === cu.user)) merged.push(cu);
+                                                                                                                                                                                });
+                                                                                                                                                                                                _ls.setItem("siso_users", JSON.stringify(merged));
+                                                                                                                                                                                                                return merged;
+                                                                                                                                                                                                                              });
+                                                                                                                                                                                                                                            // Re-verificar credenciales contra lista de Supabase
+                                                                                                                                                                                                                                                          for (const x of cloudUserList) {
+                                                                                                                                                                                                                                                                            if (x.user === u) {
+                                                                                                                                                                                                                                                                                                const ok = await _verifyPassword(p, x.passHash, x.passSalt);
+                                                                                                                                                                                                                                                                                                                  if (ok) { found = x; break; }
+                                                                                                                                                                                                                                                                                                                                  }
+                                                                                                                                                                                                                                                                                                                                                }
+                                                                                                                                                                                                                                                                                                                                                            }
+                                                                                                                                                                                                                                                                                                                                                                      }
       if (found && found.activo === false) {
         showAlert(
           "⛔ Esta cuenta está desactivada. Contacte al administrador."
@@ -14283,6 +14610,7 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
     setData(p);
     setDataType(p.type || "ocupacional");
     setActiveTab(p.type === "general" ? "formGeneral" : "form");
+    _setHcDirty(false);
     setView("historia");
   };
   const handleNewOccupHistory = () => {
@@ -14341,6 +14669,7 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
     setDataType("ocupacional");
     setHistoryNotification(null);
     setActiveTab("form");
+    _setHcDirty(false);
     goTo("historia");
     logAccess("Apertura", newId, "ocupacional"); // AUDIT: Res. 1888/2025 RDA
   };
@@ -14389,6 +14718,7 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
     });
     setDataType("general");
     setActiveTab("formGeneral");
+    _setHcDirty(false);
     goTo("historia");
     logAccess("Apertura", newId, "general"); // AUDIT: Res. 1888/2025 RDA
   };
@@ -14466,6 +14796,7 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
     _syncPatients(list);
     setSaveStatus("saved");
     setTimeout(() => setSaveStatus(""), 2500);
+    _setHcDirty(false);
     logAccess("Guardado", toSave.id, dataType); // AUDIT: Res. 1888/2025 RDA
   };
   const handleCloseHistory = () => {
@@ -15434,7 +15765,15 @@ Esta historia clínica debe conservarse mínimo 20 años.
     document.title = orig;
   };
   // ── Navegación con historial -- permite ← Volver sin volver al login ──────
-  const goTo = (newView) => {
+  // Helper: mostrar diálogo guardar-antes-de-salir si la HC tiene cambios pendientes
+  const _maybeExitHC = (proceed) => {
+    if (view === "historia" && _hcDirty && (data.id || data.nombres)) {
+      _setExitHcConfirm({ onProceed: proceed });
+    } else {
+      proceed();
+    }
+  };
+  const _goToDirect = (newView) => {
     // Al entrar al dashboard, asegurar que todos los datos del _ls estén cargados
     if (newView === "dashboard") {
       // AISLAMIENTO: usar clave específica del usuario activo (o empresa compartida)
@@ -15467,7 +15806,14 @@ Esta historia clínica debe conservarse mínimo 20 años.
     // Registrar globalmente para que PlanGate pueda navegar sin prop drilling
     window._sisoGoTo = goTo;
   };
-  const goBack = () => {
+  const goTo = (newView) => {
+    if (newView !== "historia") {
+      _maybeExitHC(() => _goToDirect(newView));
+    } else {
+      _goToDirect(newView);
+    }
+  };
+  const _goBackDirect = () => {
     setNavStack((prev) => {
       // Filtrar 'login' del historial para nunca volver al login por accidente
       const filtered = prev.filter((v) => v !== "login");
@@ -15479,6 +15825,9 @@ Esta historia clínica debe conservarse mínimo 20 años.
       setView(last);
       return filtered.slice(0, -1);
     });
+  };
+  const goBack = () => {
+    _maybeExitHC(_goBackDirect);
   };
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER HELPERS
@@ -15565,6 +15914,28 @@ Esta historia clínica debe conservarse mínimo 20 años.
               ) : null;
             })()}
         </div>
+        {/* ── Bloque 1: Datos médico activo en header ── */}
+        {currentUser && activeDoctorData?.nombre && (
+          <div className="hidden md:flex items-center gap-2 flex-shrink-0 ml-2">
+            {activeSignature ? (
+              <img
+                src={activeSignature}
+                alt="Firma"
+                className="h-7 w-auto max-w-[60px] object-contain opacity-80"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 text-xs font-black">
+                {(activeDoctorData.nombre || "?")[0]}
+              </div>
+            )}
+            <div className="leading-tight">
+              <p className="text-[10px] font-black text-gray-800 truncate max-w-[140px]">{activeDoctorData.nombre}</p>
+              {activeDoctorData.titulo && (
+                <p className="text-[9px] text-teal-600 truncate max-w-[140px]">{activeDoctorData.titulo}</p>
+              )}
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <button
             onClick={() => setShowAIConfig(true)}
@@ -15585,7 +15956,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
           {view === "historia" && (
             <>
               <button
-                onClick={() => goBack()}
+                onClick={() => data.estadoHistoria === "Cerrada" ? goTo("dashboard") : goBack()}
                 className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-gray-200 flex items-center gap-1 border border-gray-200 no-print"
               >
                 ← Volver
@@ -15633,6 +16004,15 @@ Esta historia clínica debe conservarse mínimo 20 años.
                   >
                     <ClipboardList className="w-3 h-3" /> Evolución
                   </button>
+                                <button
+                onClick={() => {
+                  setEvolucionForm((p) => ({ ...p, activeEvTab: "concepto", nuevoConcept: p.nuevoConcept || "", recomendaciones: p.recomendaciones || "" }));
+                  setShowEvolucionModal(true);
+                }}
+                className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 shadow hover:bg-emerald-700"
+              >
+                📄 Nuevo Certificado
+              </button>
                   {/* Mini-botón admin: Nota Aclaratoria / Reapertura */}
                   {(_isAdmin(currentUser?.role) ||
                     currentUser?.role === "admin_empresa") && (
@@ -21983,8 +22363,8 @@ Esta historia clínica debe conservarse mínimo 20 años.
                         const _rptIpsHtml = _miIPSReport
                           ? `<div style="text-align:right;font-size:9px;color:#555;">
                               ${
-                                _miIPSReport.logo
-                                  ? `<img src="${_miIPSReport.logo}" style="max-height:28px;max-width:70px;object-fit:contain;display:block;margin-left:auto;margin-bottom:2px;"/>`
+                                _safeLogoUrl(_miIPSReport.logo || "") // SEC-FIX-02
+                                  ? `<img src="${_safeLogoUrl(_miIPSReport.logo)}" style="max-height:28px;max-width:70px;object-fit:contain;display:block;margin-left:auto;margin-bottom:2px;"/>`
                                   : ""
                               }
                               <b style="font-size:10px;color:#059669;">${_sanitize(
@@ -22870,7 +23250,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
                             desc: "CIE-11 Colombia - transición gradual desde CIE-10 (implementado en SISO en paralelo)",
                           },
                           {
-                            ley: "Res. 5265/1994 (CUPS)",
+                            ley: "Res. 2175/2015 CUPS-MSPS",
                             desc: "Códigos Únicos de Procedimientos - integrados en solicitud de exámenes con autocomplete",
                           },
                           ,
@@ -26281,19 +26661,45 @@ Esta historia clínica debe conservarse mínimo 20 años.
   // ══════════════════════════════════════════════════════════════════════════
   const renderPortalTrabajador = () => {
     const handleBuscar = () => {
-      if (!portalCodigo.trim()) {
-        showAlert("Ingrese su código de verificación.");
+      const q = portalCodigo.trim();
+      if (!q) {
+        showAlert("Ingrese su código de verificación o número de cédula.");
         return;
       }
-      const pac = patientsList.find(
-        (p) => p.codigoVerificacion === portalCodigo.trim().toUpperCase()
+      // 1️⃣ Buscar por código de verificación (cualquier formato: SISO-... o CV-...)
+      const qUp = q.toUpperCase();
+      let pac = patientsList.find(
+        (p) => p.codigoVerificacion && p.codigoVerificacion.toUpperCase() === qUp
       );
-      if (!pac) {
-        showAlert("❌ Código no encontrado. Verifique e intente de nuevo.");
-        setPortalPaciente(null);
+      if (pac) {
+        setPortalMultiple([]);
+        setPortalPaciente(pac);
         return;
       }
-      setPortalPaciente(pac);
+      // 2️⃣ Buscar por número de documento (cédula) — solo HCs cerradas
+      const qDoc = q.replace(/\s/g, "");
+      const byDoc = patientsList.filter(
+        (p) =>
+          p.docNumero &&
+          p.docNumero.replace(/\s/g, "") === qDoc &&
+          p.estadoHistoria === "Cerrada" &&
+          !p._archivado
+      );
+      if (byDoc.length === 1) {
+        setPortalMultiple([]);
+        setPortalPaciente(byDoc[0]);
+        return;
+      }
+      if (byDoc.length > 1) {
+        // Múltiples HCs para ese documento — mostrar selector
+        setPortalPaciente(null);
+        setPortalMultiple(byDoc);
+        return;
+      }
+      // 3️⃣ No encontrado
+      showAlert("❌ Código o cédula no encontrado.\nVerifique el dato e intente de nuevo.");
+      setPortalPaciente(null);
+      setPortalMultiple([]);
     };
 
     return (
@@ -26372,7 +26778,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
               </p>
             </div>
             <p className="text-sm font-black text-gray-800 mb-3">
-              Consulta con código de verificación
+              Consulta con código de verificación o número de cédula
             </p>
             <div className="flex gap-3">
               <input
@@ -26380,8 +26786,8 @@ Esta historia clínica debe conservarse mínimo 20 años.
                 onChange={(e) => setPortalCodigo(e.target.value.toUpperCase())}
                 onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
                 className="flex-1 p-2.5 border-2 border-teal-200 rounded-xl text-sm font-mono font-black tracking-widest uppercase"
-                placeholder="Ej: SISO-2025-XXXX"
-                maxLength={30}
+                placeholder="Código (SISO-... / CV-...) o número de cédula"
+                maxLength={50}
               />
               <button
                 onClick={handleBuscar}
@@ -26391,10 +26797,44 @@ Esta historia clínica debe conservarse mínimo 20 años.
               </button>
             </div>
             <p className="text-[10px] text-gray-400 mt-2">
-              El código de verificación le fue entregado por el médico al
-              finalizar su evaluación.
+              Ingrese el código de verificación entregado por el médico, <strong>o su número de cédula</strong> para ver todas sus evaluaciones.
             </p>
           </div>
+
+          {/* Selector múltiples HC por cédula */}
+          {portalMultiple.length > 1 && !portalPaciente && (
+            <div className="bg-white rounded-2xl shadow-sm border border-teal-200 overflow-hidden">
+              <div className="bg-teal-50 px-5 py-3 border-b border-teal-100">
+                <p className="text-sm font-black text-teal-800">
+                  📋 Se encontraron {portalMultiple.length} evaluaciones para esa cédula
+                </p>
+                <p className="text-[10px] text-teal-600 mt-0.5">Seleccione la que desea consultar:</p>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {portalMultiple.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => { setPortalPaciente(p); setPortalMultiple([]); }}
+                    className="w-full text-left px-5 py-3 hover:bg-teal-50 transition flex justify-between items-center"
+                  >
+                    <div>
+                      <p className="text-sm font-black text-gray-800">{p.tipoExamen || "Evaluación"} — {p.fechaExamen || "--"}</p>
+                      <p className="text-[10px] text-gray-500">{p.empresaNombre || "--"} · {p.cargo || "--"}</p>
+                    </div>
+                    <span className={`text-[10px] font-black px-2 py-1 rounded-full ${
+                      (p.conceptoAptitud || "").toLowerCase().includes("no apto")
+                        ? "bg-red-100 text-red-700"
+                        : (p.conceptoAptitud || "").toLowerCase().includes("condicion")
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-emerald-100 text-emerald-700"
+                    }`}>
+                      {p.conceptoAptitud || "Pendiente"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Resultado */}
           {portalPaciente && (
@@ -27521,6 +27961,7 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
       const lista = [nuevo, ...arlGuardados].slice(0, 200);
       setArlGuardados(lista);
       _sync("siso_arl_reportes", JSON.stringify(lista));
+      _sbSet(`siso_arl_${currentUser?.user || "shared"}`, lista);
       setArlForm({});
       showAlert(
         "✅ Reporte guardado. Notifique a la ARL dentro de las 48 horas según Decreto 1072/2015 Art. 2.2.4.2.1.17"
@@ -27762,7 +28203,7 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
 
   // ══════════════════════════════════════════════════════════════════════════
   // B-22: HABEAS DATA - Módulo de Derechos del Titular
-  // Ley 1581 de 2012 · Decreto 1377 de 2013 · Res. 1581/2012 SIC
+  // Ley 1581 de 2012 · Decreto 1078 de 2015 (DUR MinTIC) · Res. SIC 2023
   // ══════════════════════════════════════════════════════════════════════════
   const renderHabeasData = () => {
     const TIPOS_SOLICITUD = [
@@ -27787,6 +28228,7 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
     const _syncHabeas = (lista) => {
       setHabeasRequests(lista);
       _ls.setItem("siso_habeas_requests", JSON.stringify(lista));
+      _sbSet(`siso_habeas_${currentUser?.user || "shared"}`, lista);
     };
 
     const handleRegistrarSolicitud = () => {
@@ -27878,7 +28320,7 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
                     <Shield className="w-5 h-5" /> Habeas Data
                   </h2>
                   <p className="text-indigo-200 text-xs mt-0.5">
-                    Ley 1581 de 2012 · Decreto 1377 de 2013
+                    Ley 1581 de 2012 · Decreto 1078 de 2015
                   </p>
                 </div>
               </div>
@@ -28203,6 +28645,7 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
     const _syncTele = (lista) => {
       setTeleconsultas(lista);
       _ls.setItem("siso_teleconsultas", JSON.stringify(lista));
+      _sbSet(`siso_teleconsultas_${currentUser?.user || "shared"}`, lista);
     };
 
     const handleIniciarSala = () => {
@@ -28902,16 +29345,22 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
         const upd = usersList.map((u) => (u.id === userEditId ? userData : u));
         setUsersList(upd);
         _sync("siso_users", JSON.stringify(upd));
+        _sbSet("siso_users", upd); // Bloque 1: sync inmediato a Supabase
         // Si el usuario editó su propio perfil, actualizar currentUser en memoria para reflejo inmediato
         if (
           userData.id === currentUser?.id ||
           userData.user === currentUser?.user
         ) {
           setCurrentUser((prev) => ({ ...prev, ...userData }));
+          // Sync dedicado de doctorData a Supabase (Bloque 1)
+          if (userData.doctorData) {
+            _sbSet(`siso_doctor_data_${userData.user}`, userData.doctorData);
+          }
           // También actualizar firma global si cambió
           if (userData.doctorData?.signature) {
             setDoctorSignature(userData.doctorData.signature);
             _sync("siso_doctor_signature", userData.doctorData.signature);
+            _sbSet("siso_doctor_signature", userData.doctorData.signature);
           }
         }
         setUserEditId(null);
@@ -32473,8 +32922,8 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
     return (
       <div className="min-h-screen bg-gray-50 font-sans p-8 print:bg-white print:p-0">
         <div className="max-w-4xl mx-auto">
-          {/* ── TAB SELECTOR: Propuesta Económica ↔ Cotización Rápida ── */}
-          <div className="flex gap-2 mb-4 no-print border-b border-gray-200 pb-3">
+          {/* ── TAB SELECTOR: Propuesta Económica ↔ Cotización Rápida ↔ Historial ── */}
+          <div className="flex gap-2 mb-4 no-print border-b border-gray-200 pb-3 flex-wrap">
             <button
               onClick={() => setPropModulo("propuesta")}
               className={`px-5 py-2 rounded-t-xl text-sm font-black transition-all ${
@@ -32495,8 +32944,106 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
             >
               🧾 Cotización Rápida
             </button>
+            <button
+              onClick={() => setPropModulo("historial")}
+              className={`px-5 py-2 rounded-t-xl text-sm font-black transition-all ${
+                propModulo === "historial"
+                  ? "bg-amber-600 text-white shadow"
+                  : "bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700"
+              }`}
+            >
+              🗂 Historial ({savedReports.filter(r => r._tipo === "propuesta" || r.servicios).length})
+            </button>
           </div>
           {propModulo === "cotizacion" && renderCotizacionesInline()}
+          {/* ── HISTORIAL DE PROPUESTAS GUARDADAS ── */}
+          {propModulo === "historial" && (() => {
+            const propsSaved = savedReports.filter(r => r._tipo === "propuesta" || r.servicios);
+            return (
+              <div className="bg-white shadow rounded-2xl p-6">
+                <div className="flex justify-between items-center mb-5">
+                  <h2 className="text-lg font-black text-amber-800 flex items-center gap-2">
+                    🗂 Propuestas Guardadas
+                    <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full">{propsSaved.length}</span>
+                  </h2>
+                  <button onClick={() => goBack()} className="text-gray-500 font-bold text-sm flex items-center gap-1">
+                    <LogOut className="rotate-180 w-4 h-4" /> Volver
+                  </button>
+                </div>
+                {propsSaved.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm font-medium">No hay propuestas guardadas aún.</p>
+                    <p className="text-xs mt-1">Cree una propuesta y presione Guardar.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-amber-50 text-amber-800 text-xs font-black">
+                          <th className="px-3 py-2 text-left rounded-tl-lg">N.°</th>
+                          <th className="px-3 py-2 text-left">Empresa</th>
+                          <th className="px-3 py-2 text-left">NIT</th>
+                          <th className="px-3 py-2 text-left">Fecha</th>
+                          <th className="px-3 py-2 text-right">Total</th>
+                          <th className="px-3 py-2 text-center">Vigencia</th>
+                          <th className="px-3 py-2 text-center rounded-tr-lg">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...propsSaved].reverse().map((prop, idx) => {
+                          const totalProp = (prop.servicios || []).reduce((s, x) => s + (x.precio || 0) * (x.cantidad || 1), 0);
+                          const fechaProp = prop.fecha || prop.savedAt?.split("T")[0] || "—";
+                          const diasVig = parseInt(prop.validez || "30", 10);
+                          const fechaVenc = prop.fecha ? new Date(new Date(prop.fecha).getTime() + diasVig * 86400000) : null;
+                          const vencida = fechaVenc && fechaVenc < new Date();
+                          return (
+                            <tr key={prop.id || idx} className="border-b border-gray-100 hover:bg-amber-50 transition-colors">
+                              <td className="px-3 py-2 font-black text-teal-700">#{prop.numero || "—"}</td>
+                              <td className="px-3 py-2 font-medium text-gray-800 max-w-[160px] truncate">{prop.empresa || "—"}</td>
+                              <td className="px-3 py-2 text-gray-500 text-xs">{prop.nit || "—"}</td>
+                              <td className="px-3 py-2 text-gray-500 text-xs">{fechaProp}</td>
+                              <td className="px-3 py-2 text-right font-black text-emerald-700">
+                                ${(totalProp).toLocaleString("es-CO")}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${vencida ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
+                                  {vencida ? "Vencida" : "Vigente"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <div className="flex gap-1 justify-center">
+                                  <button
+                                    onClick={() => { setPropForm(prop); setPropModulo("propuesta"); }}
+                                    className="bg-teal-100 text-teal-700 px-2 py-1 rounded text-xs font-bold hover:bg-teal-200"
+                                    title="Abrir y editar"
+                                  >
+                                    Abrir
+                                  </button>
+                                  <button
+                                    onClick={() => showConfirm("¿Eliminar esta propuesta del historial?", () => {
+                                      const upd = savedReports.filter(r => r.id !== prop.id);
+                                      setSavedReports(upd);
+                                      _sync("siso_saved_reports", JSON.stringify(upd));
+                                      _sbSet("siso_saved_reports", upd);
+                                    })}
+                                    className="bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold hover:bg-red-200"
+                                    title="Eliminar"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <div
             style={{ display: propModulo === "propuesta" ? "block" : "none" }}
           >
@@ -32526,6 +33073,7 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
                         id: Date.now(),
                         savedAt: new Date().toISOString(),
                         numero: propForm.numero || nextPropNum,
+                        _tipo: "propuesta",
                       };
                       if (!nb.empresa && !nb.nit) {
                         showAlert("Complete al menos empresa o NIT.");
@@ -38218,9 +38766,9 @@ ${
                 Logo de la Empresa
               </label>
               <div className="flex items-center gap-4">
-                {form.logo ? (
+                {_safeLogoUrl(form.logo || "") ? (
                   <img
-                    src={form.logo}
+                    src={_safeLogoUrl(form.logo)}
                     alt="Logo"
                     className="w-24 h-24 object-contain rounded-xl border border-gray-200 bg-gray-50 p-2"
                   />
@@ -38382,9 +38930,9 @@ ${
                   Vista previa — Cabecera de documentos
                 </p>
                 <div className="bg-white rounded-lg p-3 flex items-start gap-3 border border-gray-200">
-                  {form.logo && (
+                  {_safeLogoUrl(form.logo || "") && (
                     <img
-                      src={form.logo}
+                      src={_safeLogoUrl(form.logo)}
                       alt="Logo"
                       className="w-16 h-16 object-contain"
                     />
@@ -40815,6 +41363,7 @@ ${
                   setEmpresaEncontrada(null);
                   setPacientesEmpresa([]);
                   setCodigoEmpresa("");
+                  setPortalEmpresaFiltroDoc("");
                 }}
                 className="px-3 py-1.5 bg-white/20 text-white text-xs font-black rounded-lg hover:bg-white/30"
               >
@@ -41553,7 +42102,34 @@ ${
                       Los diagnósticos clínicos no se muestran en cumplimiento
                       de la Res. 1843/2025 Art. 16
                     </p>
+                    {/* Filtro por cédula / nombre */}
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        value={portalEmpresaFiltroDoc}
+                        onChange={(e) => setPortalEmpresaFiltroDoc(e.target.value)}
+                        placeholder="🔍 Filtrar por cédula o nombre del trabajador..."
+                        className="flex-1 px-3 py-1.5 border border-blue-200 rounded-lg text-xs focus:border-blue-500 focus:outline-none"
+                        maxLength={30}
+                      />
+                      {portalEmpresaFiltroDoc && (
+                        <button
+                          onClick={() => setPortalEmpresaFiltroDoc("")}
+                          className="px-2 py-1 text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg font-bold"
+                        >
+                          ✕ Limpiar
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {(() => {
+                    const filtro = portalEmpresaFiltroDoc.trim().toLowerCase().replace(/\s/g, "");
+                    const lista = filtro
+                      ? pacientesEmpresa.filter((p) =>
+                          (p.docNumero && p.docNumero.replace(/\s/g, "").toLowerCase().includes(filtro)) ||
+                          (p.nombres && p.nombres.toLowerCase().includes(filtro))
+                        )
+                      : pacientesEmpresa;
+                    return (
                   <table className="w-full text-xs">
                     <thead className="bg-gray-800 text-white">
                       <tr>
@@ -41573,7 +42149,7 @@ ${
                       </tr>
                     </thead>
                     <tbody>
-                      {pacientesEmpresa.length === 0 ? (
+                      {lista.length === 0 ? (
                         <tr>
                           <td
                             colSpan="7"
@@ -41583,7 +42159,7 @@ ${
                           </td>
                         </tr>
                       ) : (
-                        pacientesEmpresa.map((p, i) => {
+                        lista.map((p, i) => {
                           const apto = p.conceptoAptitud || "--";
                           const aptColor = apto
                             .toLowerCase()
@@ -41627,6 +42203,8 @@ ${
                       )}
                     </tbody>
                   </table>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -41956,6 +42534,7 @@ ${
               { id: "plan", label: "📋 Plan" },
               { id: "formula", label: "💊 Fórmula" },
               { id: "incapacidad", label: "🏥 Incapacidad" },
+                          { id: "concepto", label: "📄 Concepto Médico" },
             ].map((t) => (
               <button
                 key={t.id}
@@ -42521,6 +43100,64 @@ ${
               </div>
             )}
           </div>
+                    {/* TAB: Concepto Médico + Certificado */}
+          {evTab === "concepto" && (
+            <div className="space-y-3">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                <h4 className="text-xs font-bold text-emerald-800 mb-2">📄 Concepto Médico Ocupacional</h4>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[10px] font-black text-gray-600 block mb-1">Concepto de Aptitud</label>
+                    <select
+                      value={evolucionForm.nuevoConcept || ""}
+                      onChange={(e) => setEvolucionForm((p) => ({ ...p, nuevoConcept: e.target.value }))}
+                      className="w-full p-2 border border-emerald-300 rounded text-xs bg-white"
+                    >
+                      <option value="">-- Seleccione concepto --</option>
+                      <option value="APTO">APTO</option>
+                      <option value="APTO CON RESTRICCIONES">APTO CON RESTRICCIONES</option>
+                      <option value="NO APTO">NO APTO</option>
+                      <option value="APTO CON LIMITACIONES">APTO CON LIMITACIONES</option>
+                      <option value="PENDIENTE">PENDIENTE - Requiere evaluación adicional</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-600 block mb-1">Recomendaciones y Restricciones</label>
+                    <textarea
+                      rows={3}
+                      value={evolucionForm.recomendaciones || ""}
+                      onChange={(e) => setEvolucionForm((p) => ({ ...p, recomendaciones: e.target.value }))}
+                      className="w-full p-2 border border-emerald-300 rounded text-xs"
+                      placeholder="Describa restricciones, recomendaciones y condiciones especiales..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-gray-600 block mb-1">Observaciones adicionales</label>
+                    <textarea
+                      rows={2}
+                      value={evolucionForm.texto || ""}
+                      onChange={(e) => setEvolucionForm((p) => ({ ...p, texto: e.target.value }))}
+                      className="w-full p-2 border border-emerald-300 rounded text-xs"
+                      placeholder="Observaciones del médico..."
+                    />
+                  </div>
+                </div>
+              </div>
+              {evolucionForm.nuevoConcept && (
+                <button
+                  onClick={() => {
+                    const certData = { ...data, conceptoMedico: evolucionForm.nuevoConcept, recomendaciones: evolucionForm.recomendaciones, fechaCierre: new Date().toISOString().split("T")[0] };
+                    const html = _generarCertificadoHTMLNormalizado(certData, activeDoctorData || {}, activeSignature, companies.find((c) => c.id === currentUser?.empresaId) || {});
+                    const win = window.open("", "_blank");
+                    if (win) { win.document.write(html); win.document.close(); win.print(); }
+                  }}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center justify-center gap-2"
+                >
+                  📄 Expedir Nuevo Certificado Médico
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Footer: guardar */}
           <div className="border-t border-gray-100 px-4 py-3 flex justify-between items-center flex-shrink-0 bg-gray-50 rounded-b-2xl">
@@ -42880,6 +43517,7 @@ ${
         ? "empresa_" + currentUser.empresaId
         : currentUser?.user || "shared";
       localStorage.setItem(`siso_caja_${suf}`, JSON.stringify(movs));
+      _sbSet(`siso_caja_movs_${suf}`, movs); // Bloque 3: sync Supabase
     } catch {}
   };
   // ── B-F2-01/02: Generar comprobante ──────────────────────────────────
@@ -42899,8 +43537,8 @@ ${
     const _compLeftHtml = _miIPSComp
       ? `<div style="text-align:left;">
           ${
-            _miIPSComp.logo
-              ? `<img src="${_miIPSComp.logo}" style="max-height:36px;max-width:90px;object-fit:contain;display:block;margin-bottom:3px;"/>`
+            _safeLogoUrl(_miIPSComp.logo || "") // SEC-FIX-02
+              ? `<img src="${_safeLogoUrl(_miIPSComp.logo)}" style="max-height:36px;max-width:90px;object-fit:contain;display:block;margin-bottom:3px;"/>`
               : ""
           }
           <div style="font-size:11px;font-weight:900;color:#1a1a1a;">${_sanitize(
@@ -43270,8 +43908,8 @@ body{font-family:Arial,sans-serif;margin:0;background:#f5f5f5}
                   const _carnetIpsBrand = _miIPSCarnet
                     ? `<div style="display:flex;align-items:center;gap:6px;border-bottom:1px solid #d1fae5;padding-bottom:5px;margin-bottom:7px;">
                         ${
-                          _miIPSCarnet.logo
-                            ? `<img src="${_miIPSCarnet.logo}" style="max-height:20px;max-width:50px;object-fit:contain;"/>`
+                          _safeLogoUrl(_miIPSCarnet.logo || "") // SEC-FIX-02
+                            ? `<img src="${_safeLogoUrl(_miIPSCarnet.logo)}" style="max-height:20px;max-width:50px;object-fit:contain;"/>`
                             : ""
                         }
                         <span style="font-size:8px;font-weight:900;color:#065f46;text-transform:uppercase;">${_sanitize(
@@ -44787,6 +45425,50 @@ body{padding-top:52px;}
                 className="flex-1 py-2 bg-yellow-500 text-white rounded-xl font-bold hover:bg-yellow-600 text-sm"
               >
                 Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Modal Guardar antes de salir de HC ──────────────────────────── */}
+      {_exitHcConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[210] p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full text-center animate-fade-in">
+            <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="w-6 h-6 text-amber-500" />
+            </div>
+            <h3 className="text-gray-800 font-black text-base mb-1">¿Guardar antes de salir?</h3>
+            <p className="text-gray-500 text-xs mb-5">
+              Tiene cambios sin guardar en esta Historia Clínica.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  const proceed = _exitHcConfirm.onProceed;
+                  _setExitHcConfirm(null);
+                  handleSavePatient();
+                  proceed();
+                }}
+                className="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 text-sm flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4" /> Guardar y salir
+              </button>
+              <button
+                onClick={() => {
+                  const proceed = _exitHcConfirm.onProceed;
+                  _setExitHcConfirm(null);
+                  _setHcDirty(false);
+                  proceed();
+                }}
+                className="w-full py-2.5 border border-red-200 text-red-600 rounded-xl font-bold hover:bg-red-50 text-sm"
+              >
+                Salir sin guardar
+              </button>
+              <button
+                onClick={() => _setExitHcConfirm(null)}
+                className="w-full py-2 text-gray-400 hover:text-gray-600 text-sm font-medium"
+              >
+                Cancelar
               </button>
             </div>
           </div>
