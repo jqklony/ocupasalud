@@ -344,7 +344,7 @@ const PLAN_CONFIG = {
     label: "🆓 Libre",
     price: 0,
     priceLabel: "Gratis",
-    maxHC: 30, // total, no mensual
+    maxHC: 8, // total, no mensual
     maxEmpresas: 5,
     maxPacientes: 50,
     maxMedicos: 1,
@@ -376,7 +376,7 @@ const PLAN_CONFIG = {
     maxHC: 200,
     maxEmpresas: 30,
     maxPacientes: 9999,
-    maxMedicos: 2,
+    maxMedicos: 1,
     maxSVEprogramas: 2,
     maxTeleSesiones: 10,
     storageMB: 512,
@@ -414,7 +414,7 @@ const PLAN_CONFIG = {
     maxHC: 9999,
     maxEmpresas: 9999,
     maxPacientes: 9999,
-    maxMedicos: 3,
+    maxMedicos: 1,
     maxSVEprogramas: 7,
     maxTeleSesiones: 9999,
     storageMB: 3072,
@@ -467,7 +467,9 @@ const PLAN_CONFIG = {
     maxHC: 9999,
     maxEmpresas: 9999,
     maxPacientes: 9999,
-    maxMedicos: 9999,
+    maxMedicos: 3,
+    maxMedicosBase: 3,
+    precioPorMedicoExtra: 45000,
     maxSVEprogramas: 7,
     maxTeleSesiones: 9999,
     storageMB: 10240,
@@ -568,15 +570,23 @@ const MEDICO_SIEMPRE_PUEDE = new Set([
 // - Admin siempre puede todo
 // - Médico sigue sus propias reglas (sin cambio)
 // - Secretaria: SOLO si admin habilitó explícitamente ESA feature
+// FUENTE DE VERDAD (en orden de prioridad):
+//   1. usersList (siempre la más actualizada desde Supabase)
+//   2. currentUser.secretariaPermisos (cacheado en sesión actual)
+//   3. SECRETARIA_PERMISOS_DEFAULT (todo denegado)
 const _secretariaPuede = (feature, currentUser, usersList) => {
   if (!currentUser) return false;
   if (_isAdmin(currentUser.role)) return true;
-  if (_isAdminEmpresa(currentUser.role)) return true; // admin_empresa tiene acceso completo dentro de su empresa
+  if (_isAdminEmpresa(currentUser.role)) return true;
   if (currentUser.role === "medico")
     return MEDICO_SIEMPRE_PUEDE.has(feature) || true;
   if (currentUser.role === "secretaria") {
+    // Buscar siempre en usersList primero (tiene los datos más frescos de Supabase)
     const userObj = usersList?.find((u) => u.user === currentUser.user);
-    const permisos = userObj?.secretariaPermisos || SECRETARIA_PERMISOS_DEFAULT;
+    // Fallback a currentUser si usersList no tiene el objeto aún
+    const permisos = userObj?.secretariaPermisos
+      || currentUser?.secretariaPermisos
+      || SECRETARIA_PERMISOS_DEFAULT;
     return permisos[feature] === true;
   }
   return false;
@@ -999,33 +1009,114 @@ const ETNIA_LIST = [
 const SPECIALTIES_LIST = [
   "Alergología",
   "Anestesiología",
+  "Angiología y Cirugía Vascular",
+  "Audiología",
   "Cardiología",
+  "Cardiología Pediátrica",
+  "Cirugía Bariátrica",
+  "Cirugía Cardiovascular",
+  "Cirugía de Cabeza y Cuello",
+  "Cirugía de Columna",
+  "Cirugía de Mano",
+  "Cirugía de Mama y Tejidos Blandos",
+  "Cirugía de Tórax",
   "Cirugía General",
+  "Cirugía Hepatobiliar",
+  "Cirugía Maxilofacial",
+  "Cirugía Pediátrica",
+  "Cirugía Plástica y Reconstructiva",
+  "Coloproctología",
+  "Cuidado Paliativo",
+  "Cuidados Intensivos",
   "Dermatología",
+  "Dolor y Cuidados Paliativos",
+  "Electrofisiología Cardíaca",
   "Endocrinología",
-  "Fisiatría",
+  "Endocrinología Pediátrica",
+  "Enfermería Profesional",
+  "Epidemiología",
+  "Fisiatría (Medicina Física y Rehabilitación)",
   "Fisioterapia",
   "Fonoaudiología",
   "Gastroenterología",
+  "Gastroenterología Pediátrica",
+  "Genética Médica",
   "Geriatría",
   "Ginecología y Obstetricia",
+  "Ginecología Oncológica",
   "Hematología",
+  "Hematología Pediátrica",
+  "Hepatología",
   "Infectología",
-  "Medicina del Trabajo",
+  "Infectología Pediátrica",
+  "Inmunología Clínica",
+  "Mastología",
+  "Medicina Alternativa y Complementaria",
+  "Medicina de Emergencias",
+  "Medicina del Deporte",
+  "Medicina del Dolor",
+  "Medicina del Trabajo y Salud Ocupacional",
+  "Medicina Estética",
+  "Medicina Familiar",
+  "Medicina Forense",
+  "Medicina General",
+  "Medicina Interna",
+  "Medicina Nuclear",
+  "Medicina Preventiva y Salud Pública",
   "Nefrología",
+  "Nefrología Pediátrica",
+  "Neonatología",
   "Neumología",
+  "Neumología Pediátrica",
+  "Neurocirugía",
+  "Neurofisiología Clínica",
   "Neurología",
-  "Nutrición",
+  "Neurología Pediátrica",
+  "Neuropediatría",
+  "Neuropsicología",
+  "Neuropsiquiatría",
+  "Neurorradiología",
+  "Nutrición y Dietética",
+  "Obstetricia de Alto Riesgo",
+  "Odontología General",
   "Oftalmología",
+  "Oftalmología Pediátrica",
   "Oncología",
-  "Ortopedia",
+  "Oncología Pediátrica",
+  "Oncología Radioterápica",
+  "Optometría",
+  "Ortodoncia",
+  "Ortopedia y Traumatología",
+  "Ortopedia Pediátrica",
+  "Otología y Neurotología",
   "Otorrinolaringología",
+  "Patología",
+  "Patología Clínica (Laboratorio)",
   "Pediatría",
-  "Psicología",
+  "Perinatología",
+  "Periodoncia",
+  "Podología",
+  "Psicología Clínica",
+  "Psicología Ocupacional",
   "Psiquiatría",
-  "Radiología",
+  "Psiquiatría Infantil y del Adolescente",
+  "Radiología e Imágenes Diagnósticas",
+  "Radiología Intervencionista",
+  "Rehabilitación Cardíaca",
+  "Rehabilitación Neurológica",
+  "Rehabilitación Oral",
+  "Rehabilitación Pulmonar",
   "Reumatología",
+  "Reumatología Pediátrica",
+  "Salud Mental Comunitaria",
+  "Salud Ocupacional",
+  "Terapia Ocupacional",
+  "Terapia Respiratoria",
+  "Toxicología Clínica",
+  "Traumatología Deportiva",
   "Urología",
+  "Urología Pediátrica",
+  "Vascular Periférico",
 ].sort();
 // ==========================================
 // CATÁLOGO DE MEDICAMENTOS GENÉRICOS COLOMBIA
@@ -7452,6 +7543,8 @@ const initialOccupPatientState = {
   recomendaciones: "",
   vigencia: "",
   analisisRestricciones: "",
+  analisisIA: "",
+  sveRecomendado: [],
   restriccionesChecklist: {},
   recomendacionesChecklist: {},
   formulaMedica: "",
@@ -7568,7 +7661,7 @@ const initialUsers = [
     user: "drcucalon",
     passHash:
       "49679f37304820e18bae7ed12292e42a7722a7d1a55f12e41b1abca5cc5162fd",
-    mustChangePassword: true,
+    mustChangePassword: false, // FIX: no forzar cambio — Supabase tiene la contraseña real
     name: "Dr. Julian Cucalon",
     role: "super_admin", // FASE 2: promovido a super_admin (puede crear orgs + HC)
     orgId: ORG_DEFAULT_ID, // FASE 2: organización principal
@@ -7698,6 +7791,15 @@ const _FortalezaPass = ({ pw }) => {
     </div>
   );
 };
+// SEC-F1-06: Content Security Policy via meta tag
+const SecurityHeaders = () => (
+  <>
+    <meta httpEquiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://*.supabase.co https://generativelanguage.googleapis.com https://api.groq.com https://api.together.xyz https://openrouter.ai https://api.anthropic.com; font-src 'self' https:; frame-ancestors 'none';" />
+    <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
+    <meta httpEquiv="X-Frame-Options" content="DENY" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+  </>
+);
 const PrintStyles = () => (
   <style>{`
     /* ═══════════════════════════════════════════════════════
@@ -7780,8 +7882,26 @@ const PrintStyles = () => (
       th, td { padding: 1.5mm 2mm !important; font-size: 8pt !important; }
       /* Inputs transparentes */
       input, select, textarea { border: none !important; border-bottom: 0.5pt solid #888 !important; background: transparent !important; padding: 0 !important; font-size: 8pt !important; font-weight: 600 !important; -webkit-appearance: none !important; box-shadow: none !important; outline: none !important; }
+      /* Checkboxes: mantener visible su estado */
+      input[type="checkbox"] { -webkit-appearance: checkbox !important; appearance: checkbox !important; border: none !important; border-bottom: none !important; width: 12px !important; height: 12px !important; }
+      /* Select: mostrar valor sin flecha */
+      select { -webkit-appearance: none !important; border-bottom: 0.5pt solid #888 !important; }
+      /* Asegurar que la firma del médico se muestre en impresión */
+      .signature-block, .print\\:flex { display: flex !important; visibility: visible !important; }
+      .hidden.print\\:flex { display: flex !important; }
+      .hidden.print\\:block { display: block !important; }
       /* Textarea: mostrar todo el texto sin recortar */
-      textarea { height: auto !important; max-height: none !important; overflow: visible !important; resize: none !important; white-space: pre-wrap !important; }
+      textarea, [contenteditable], .text-libre { height: auto !important; max-height: none !important; overflow: visible !important; resize: none !important; white-space: pre-wrap !important; word-wrap: break-word !important; break-inside: avoid !important; page-break-inside: avoid !important; }
+      /* Contenedores de texto libre - sin truncar */
+      .overflow-y-auto, .overflow-auto, .overflow-hidden { overflow: visible !important; max-height: none !important; }
+      /* Ocultar etiquetas "sugerido por IA" y "generado por IA" al imprimir */
+      .ai-label-print-hide, [data-ai-label] { display: none !important; }
+      /* Reportes IA: ajustar cuadros al contenido, no estirar */
+      .bg-amber-50, .bg-emerald-50, .bg-indigo-50, .bg-blue-50 { page-break-inside: avoid !important; break-inside: avoid !important; }
+      .whitespace-pre-wrap { white-space: pre-wrap !important; word-wrap: break-word !important; }
+      /* Reportes: ocultar botones y etiquetas de IA */
+      [class*="BrainCircuit"], .no-print, button { display: none !important; }
+      button.print-show { display: inline-flex !important; }
       ::placeholder { color: transparent !important; }
       /* Grid y flex */
       .grid { display: grid !important; }
@@ -7799,6 +7919,8 @@ const PrintStyles = () => (
     @keyframes fade-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
     .animate-fade-in { animation: fade-in 0.25s ease-out both; }
     .checklist-item { transition: background 0.1s; }
+    /* GLOBAL: Todos los textareas redimensionables y auto-expandibles */
+    textarea { resize: vertical !important; min-height: 60px; field-sizing: content; overflow-y: hidden; }
   `}</style>
 );
 // DoctorSignature: muestra imagen de firma + datos completos del profesional debajo
@@ -8022,35 +8144,70 @@ const PlanGate = ({
   inline,
 }) => {
   if (_canUse(feature, currentUser)) return children;
-  const req = PLAN_CONFIG[requiredPlan] || PLAN_CONFIG.starter;
+  const plan = PLAN_CONFIG[currentUser?.license || "libre"];
+  const req  = PLAN_CONFIG[requiredPlan] || PLAN_CONFIG.starter;
+  const isExpired = plan && plan.price > 0 && currentUser?.licenseExpiry
+    && new Date(currentUser.licenseExpiry) < new Date();
   if (fallback) return fallback;
   if (inline)
     return (
       <span
         className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded-lg text-[10px] font-black text-amber-700 cursor-default"
-        title={`Disponible en plan ${req.label}`}
+        title={isExpired ? "Plan vencido — comunícate con tu administrador" : `Disponible en plan ${req.label}`}
       >
-        🔒 {req.label}
+        {isExpired ? "⏰ Plan vencido" : `🔒 ${req.label}`}
       </span>
     );
+  if (isExpired) {
+    return (
+      <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-6 text-center space-y-4 shadow-sm">
+        <div className="text-5xl">⏰</div>
+        <div>
+          <p className="font-black text-amber-900 text-lg">¡Tu plan ha vencido!</p>
+          <p className="text-amber-700 text-sm mt-1">
+            Tu suscripción <strong>{plan.label}</strong> expiró el{" "}
+            <strong>{new Date(currentUser.licenseExpiry).toLocaleDateString("es-CO", { day:"numeric", month:"long", year:"numeric" })}</strong>.
+            <br/>Tu información está segura. Solo necesitas renovar para continuar.
+          </p>
+        </div>
+        <div className="bg-white border border-amber-200 rounded-xl p-4 text-left space-y-2 max-w-sm mx-auto">
+          <p className="text-xs font-black text-amber-800 uppercase tracking-wide mb-2">💬 Renueva tu plan fácilmente</p>
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <span className="text-base">👨‍⚕️</span>
+            <span><strong>Dr. Julián Cucalón</strong> — OcupaSalud</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-base">📱</span>
+            <a href="tel:+573182213979" className="font-bold text-amber-700 hover:underline">318 221 3979</a>
+            <span className="text-gray-400 text-xs">(llamada o WhatsApp)</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-base">📧</span>
+            <a href="mailto:dr.juliancucalon@gmail.com" className="font-bold text-amber-700 hover:underline text-xs">dr.juliancucalon@gmail.com</a>
+          </div>
+          <a href="https://wa.me/573182213979?text=Hola%20Dr.%20Cucal%C3%B3n%2C%20quiero%20renovar%20mi%20plan%20OcupaSalud" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 w-full mt-2 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-xl text-sm font-black transition">
+            💬 Escribir por WhatsApp ahora
+          </a>
+        </div>
+        <p className="text-[10px] text-amber-600">Una vez renovado, tu acceso se restablece en segundos ✅</p>
+      </div>
+    );
+  }
   return (
-    <div className="bg-gradient-to-br from-slate-50 to-blue-50 border-2 border-dashed border-blue-200 rounded-xl p-5 text-center space-y-2">
+    <div className="bg-gradient-to-br from-slate-50 to-blue-50 border-2 border-dashed border-blue-200 rounded-xl p-5 text-center space-y-3">
       <div className="text-3xl">🔒</div>
-      <p className="font-black text-gray-800 text-sm">
-        Disponible en plan {req.label}
-      </p>
-      <p className="text-gray-500 text-xs">
-        {req.priceLabel} · Desbloquea funciones avanzadas
-      </p>
-      <button
-        onClick={() => {
-          // Intentar navegar a planes - el handler se pasa via window para evitar prop drilling
-          if (window._sisoGoTo) window._sisoGoTo("planes");
-        }}
-        className="mt-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition"
-      >
-        ⬆️ Ver planes
-      </button>
+      <div>
+        <p className="font-black text-gray-800 text-sm">Disponible en plan {req.label}</p>
+        <p className="text-gray-500 text-xs mt-1">{req.priceLabel} · Desbloquea esta y muchas funciones más</p>
+      </div>
+      <div className="flex flex-col gap-2">
+        <button onClick={() => { if (window._sisoGoTo) window._sisoGoTo("planes"); }} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition">
+          ⬆️ Ver planes y precios
+        </button>
+        <a href="https://wa.me/573182213979?text=Hola%20Dr.%20Cucal%C3%B3n%2C%20me%20interesa%20el%20plan%20OcupaSalud" target="_blank" rel="noreferrer" className="text-xs text-green-700 font-bold hover:underline">
+          💬 Consultar por WhatsApp · 318 221 3979
+        </a>
+      </div>
     </div>
   );
 };
@@ -8216,12 +8373,15 @@ const LicenciasTab = ({
     );
     setUsersList(upd);
     _sync("siso_users", JSON.stringify(upd));
-    if (currentUser?.user === u.user)
+    _sbSet("siso_users", upd); // sync inmediato a nube
+    if (currentUser?.user === u.user) {
       setCurrentUser((prev) => ({
         ...prev,
         license: licForm.license,
         licenseExpiry: licForm.licenseExpiry || null,
+        licenseStarted: licForm.licenseStarted || new Date().toISOString().split("T")[0],
       }));
+    }
     setLicSaved(true);
     setPendingActivationPlan(null);
     setTimeout(() => {
@@ -8881,12 +9041,13 @@ const AIConfigPanel = ({ aiConfig, onSave, onClose }) => {
       link: "https://aistudio.google.com/apikey",
       color: "blue",
       steps: [
-        "Abre aistudio.google.com/apikey (clic en 'Obtener key →')",
-        "Inicia sesión con tu cuenta Google",
-        "Clic en 'Create API Key'",
-        "Selecciona un proyecto (o crea uno nuevo gratuito)",
-        "Copia la key (empieza con 'AIza...')",
-        "Pégala en el campo de abajo y haz clic en Probar",
+        "1️⃣ Haz clic en el botón 'Obtener key →' de abajo",
+        "2️⃣ Inicia sesión con tu cuenta de Google (Gmail)",
+        "3️⃣ Aparecerá el panel de 'API Keys'. Clic en 'Create API Key'",
+        "4️⃣ Selecciona 'Create API key in new project' (es gratis)",
+        "5️⃣ Se genera una key que empieza con 'AIza...' → cópiala",
+        "6️⃣ Regresa aquí, pégala en el campo y presiona 'Probar'",
+        "💡 Tip: Gemini es el más recomendado por calidad y velocidad",
       ],
     },
     groq: {
@@ -8897,12 +9058,13 @@ const AIConfigPanel = ({ aiConfig, onSave, onClose }) => {
       link: "https://console.groq.com/keys",
       color: "green",
       steps: [
-        "Abre console.groq.com/keys (clic en 'Obtener key →')",
-        "Crea una cuenta gratuita (o usa Google/GitHub)",
-        "En el menú, ve a 'API Keys'",
-        "Clic en 'Create API Key', ponle un nombre",
-        "Copia la key (empieza con 'gsk_...')",
-        "Pégala en el campo de abajo y haz clic en Probar",
+        "1️⃣ Haz clic en el botón 'Obtener key →' de abajo",
+        "2️⃣ Crea cuenta gratis con Google o GitHub (botón 'Sign Up')",
+        "3️⃣ Una vez dentro, ya estarás en la sección 'API Keys'",
+        "4️⃣ Clic en 'Create API Key' → ponle cualquier nombre → 'Submit'",
+        "5️⃣ Copia la key que empieza con 'gsk_...'",
+        "6️⃣ Regresa aquí, pégala en el campo y presiona 'Probar'",
+        "💡 Tip: Groq es el más rápido pero tiene límite de 30 peticiones/minuto",
       ],
     },
     together: {
@@ -8910,15 +9072,16 @@ const AIConfigPanel = ({ aiConfig, onSave, onClose }) => {
       sub: "Llama 3.3 70B · Muy estable",
       badge: "🟢 Gratis · Sin límite diario",
       badgeClass: "bg-teal-100 text-teal-800",
-      link: "https://api.together.ai",
+      link: "https://api.together.ai/settings/api-keys",
       color: "teal",
       steps: [
-        "Abre api.together.ai (clic en 'Obtener key →')",
-        "Clic en 'Sign Up' o 'Continue with Google'",
-        "Una vez dentro, ve a Settings → API Keys",
-        "Clic en 'Create new API key'",
-        "Copia la key que aparece",
-        "Pégala en el campo de abajo y haz clic en Probar",
+        "1️⃣ Haz clic en el botón 'Obtener key →' de abajo",
+        "2️⃣ Clic en 'Sign Up' o 'Continue with Google' (cuenta gratis)",
+        "3️⃣ En el panel, ve a Settings → API Keys (menú izquierdo)",
+        "4️⃣ Clic en 'Create new API key' → ponle nombre → crear",
+        "5️⃣ Copia la key que aparece (solo se muestra una vez)",
+        "6️⃣ Regresa aquí, pégala en el campo y presiona 'Probar'",
+        "💡 Tip: Together AI no tiene límite diario. Ideal como respaldo",
       ],
     },
     openrouter: {
@@ -8929,12 +9092,13 @@ const AIConfigPanel = ({ aiConfig, onSave, onClose }) => {
       link: "https://openrouter.ai/keys",
       color: "purple",
       steps: [
-        "Abre openrouter.ai/keys (clic en 'Obtener key →')",
-        "Clic en 'Sign in' → usa Google o GitHub",
-        "Una vez dentro, clic en 'Create Key'",
-        "Ponle un nombre y clic en 'Create'",
-        "Copia la key (empieza con 'sk-or-...')",
-        "Pégala en el campo de abajo y haz clic en Probar",
+        "1️⃣ Haz clic en el botón 'Obtener key →' de abajo",
+        "2️⃣ Clic en 'Sign in' → usa tu cuenta de Google o GitHub",
+        "3️⃣ En el menú superior, clic en 'Keys'",
+        "4️⃣ Clic en 'Create Key' → ponle nombre → 'Create'",
+        "5️⃣ Copia la key que empieza con 'sk-or-...'",
+        "6️⃣ Regresa aquí, pégala en el campo y presiona 'Probar'",
+        "💡 Tip: OpenRouter da acceso a múltiples modelos con una sola key",
       ],
     },
   };
@@ -12395,6 +12559,7 @@ function ChangePasswordForm({
                 );
                 setUsersList(upd);
                 _sync("siso_users", JSON.stringify(upd));
+                _sbSet("siso_users", upd); // FIX: sync inmediato a Supabase tras cambio de contraseña
                 setCurrentUser((prev) => ({
                   ...prev,
                   mustChangePassword: false,
@@ -12415,13 +12580,125 @@ function ChangePasswordForm({
   );
 }
 
+// ============================================================
+// FASE 1 — ESTABILIZACIÓN: SEGURIDAD Y RESILIENCIA
+// ============================================================
+
+// SEC-F1-01: HTTPS enforcement (producción)
+if (typeof window !== "undefined" && window.location.protocol === "http:" && 
+    !window.location.hostname.includes("localhost") && 
+    !window.location.hostname.includes("127.0.0.1") &&
+    !window.location.hostname.includes("csb.app")) {
+  window.location.replace("https:" + window.location.href.substring(5));
+}
+
+// SEC-F1-02: Error Boundary — Previene pantalla blanca ante errores
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    this.setState({ errorInfo });
+    console.error("[OCUPASALUD] Error capturado:", error, errorInfo);
+    try {
+      const logs = JSON.parse(localStorage.getItem("siso_error_log") || "[]");
+      logs.push({
+        ts: new Date().toISOString(),
+        msg: error?.message || String(error),
+        stack: error?.stack?.substring(0, 500) || "",
+        component: errorInfo?.componentStack?.substring(0, 300) || "",
+      });
+      if (logs.length > 50) logs.splice(0, logs.length - 50);
+      localStorage.setItem("siso_error_log", JSON.stringify(logs));
+    } catch (_) {}
+  }
+  render() {
+    if (this.state.hasError) {
+      return React.createElement("div", {
+        style: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #1e293b, #0f172a)", fontFamily: "Arial, sans-serif", padding: "20px" }
+      }, React.createElement("div", {
+        style: { background: "white", borderRadius: "16px", padding: "40px", maxWidth: "480px", width: "100%", textAlign: "center", boxShadow: "0 25px 50px rgba(0,0,0,0.3)" }
+      }, [
+        React.createElement("div", { key: "icon", style: { fontSize: "48px", marginBottom: "16px" } }, "⚠️"),
+        React.createElement("h1", { key: "title", style: { fontSize: "20px", fontWeight: "900", color: "#1e293b", marginBottom: "8px" } }, "OcupaSalud — Error inesperado"),
+        React.createElement("p", { key: "msg", style: { fontSize: "13px", color: "#64748b", marginBottom: "20px", lineHeight: "1.5" } },
+          "Se produjo un error en la aplicación. Sus datos están seguros en la nube. Intente recargar la página."
+        ),
+        React.createElement("p", { key: "detail", style: { fontSize: "11px", color: "#94a3b8", marginBottom: "20px", background: "#f8fafc", padding: "10px", borderRadius: "8px", wordBreak: "break-word" } },
+          this.state.error?.message || "Error desconocido"
+        ),
+        React.createElement("div", { key: "btns", style: { display: "flex", gap: "10px", justifyContent: "center" } }, [
+          React.createElement("button", {
+            key: "reload",
+            onClick: () => window.location.reload(),
+            style: { background: "#059669", color: "white", border: "none", padding: "10px 24px", borderRadius: "8px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }
+          }, "🔄 Recargar"),
+          React.createElement("button", {
+            key: "reset",
+            onClick: () => { this.setState({ hasError: false, error: null, errorInfo: null }); },
+            style: { background: "#e2e8f0", color: "#334155", border: "none", padding: "10px 24px", borderRadius: "8px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }
+          }, "↩ Reintentar"),
+        ]),
+      ]));
+    }
+    return this.props.children;
+  }
+}
+
+// SEC-F1-03: Cifrado AES-GCM para datos sensibles en localStorage
+const _ENCRYPT_KEY_NAME = "siso_enc_key";
+const _getEncryptKey = async () => {
+  try {
+    const stored = _ss.getItem(_ENCRYPT_KEY_NAME);
+    if (stored) {
+      const raw = Uint8Array.from(atob(stored), c => c.charCodeAt(0));
+      return await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+    }
+    const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+    const exported = await crypto.subtle.exportKey("raw", key);
+    _ss.setItem(_ENCRYPT_KEY_NAME, btoa(String.fromCharCode(...new Uint8Array(exported))));
+    return key;
+  } catch { return null; }
+};
+const _encryptData = async (plainText) => {
+  try {
+    const key = await _getEncryptKey();
+    if (!key) return plainText;
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(plainText);
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(encrypted), iv.length);
+    return "ENC:" + btoa(String.fromCharCode(...combined));
+  } catch { return plainText; }
+};
+const _decryptData = async (cipherText) => {
+  try {
+    if (!cipherText || !cipherText.startsWith("ENC:")) return cipherText;
+    const key = await _getEncryptKey();
+    if (!key) return cipherText;
+    const combined = Uint8Array.from(atob(cipherText.slice(4)), c => c.charCodeAt(0));
+    const iv = combined.slice(0, 12);
+    const data = combined.slice(12);
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data);
+    return new TextDecoder().decode(decrypted);
+  } catch { return cipherText; }
+};
+
 // B-27: PWA - Registro SW si existe (offline support)
 if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => {});
   });
 }
-export default function App() {
+
+// ── App principal envuelta en ErrorBoundary ──
+function AppInner() {
   const [view, setView] = useState(() => {
     // Restaurar vista activa al recargar - si había sesión activa
     try {
@@ -12526,6 +12803,7 @@ export default function App() {
   const [aiStatus, setAiStatus] = useState(null); // null | 'ok' | 'error'
   const [companies, setCompanies] = useState([]);
   const [usersList, setUsersList] = useState(initialUsers);
+  const [usersReady, setUsersReady] = useState(false); // FIX: esperar Supabase antes de login
   const [patientsList, setPatientsList] = useState([]);
   const [savedReports, setSavedReports] = useState([]);
   const [savedBills, setSavedBills] = useState([]);
@@ -12660,6 +12938,16 @@ export default function App() {
   };
   // B-20: DIAN Facturación Electrónica
   const [showDianPanel, setShowDianPanel] = useState(false);
+  // Modal datos paciente para secretaria (sin ficha clínica)
+  const [showSecretariaPatientModal, setShowSecretariaPatientModal] = useState(null);
+  // Selector médico para reportes
+  const [selectedMedicoReport, setSelectedMedicoReport] = useState("");
+  // Modal checklist "Todo"
+  const [showTodoChecklist, setShowTodoChecklist] = useState(false);
+  const [todoSelection, setTodoSelection] = useState({
+    certificado: true, hcCompleta: true, incapacidad: true,
+    formula: true, derivaciones: true, examenes: true,
+  });
   const [dianProvider, setDianProvider] = useState("siigo"); // 'siigo' | 'alegra' | 'manual'
   const [dianApiKey, setDianApiKey] = useState(() => {
     try {
@@ -12901,6 +13189,7 @@ export default function App() {
   const [teleForm, setTeleForm] = useState({
     paciente: "",
     documento: "",
+    celular: "",
     fecha: new Date().toISOString().split("T")[0],
     hora: "",
     motivo: "",
@@ -12909,6 +13198,7 @@ export default function App() {
   });
   const [teleSalaActiva, setTeleSalaActiva] = useState(null); // {roomName, paciente, fecha, hora}
   const [teleTab, setTeleTab] = useState("nueva"); // 'nueva' | 'historial'
+  const [teleEspera, setTeleEspera] = useState([]); // sala de espera telemedicina
   const [mensajeRespuesta, setMensajeRespuesta] = useState(""); // texto de respuesta libre
   // ── AGENDA / SALA DE ESPERA ─────────────────────────────────────
   const [agendados, setAgendados] = useState([]); // [{id,nombre,doc,tipo,medicoId,hora,estado:'espera'|'atendiendo'|'atendido',horaInicio,horaFin}]
@@ -12959,7 +13249,11 @@ export default function App() {
     _showSuggs: false,
   });
   const [agendaSuggs, setAgendaSuggs] = useState([]);
-  const [agendaTab, setAgendaTab] = useState("hoy"); // 'hoy' | 'proximas' | 'nueva'
+  const [agendaTab, setAgendaTab] = useState("hoy"); // 'hoy' | 'proximas' | 'nueva' | 'semanal' | 'mensual'
+  const [agendaRecurrente, setAgendaRecurrente] = useState(false);
+  const [agendaRecurrenciaPeriodo, setAgendaRecurrenciaPeriodo] = useState("3m");
+  const [agendaSemanaOffset, setAgendaSemanaOffset] = useState(0); // semana actual = 0
+  const [agendaMesOffset, setAgendaMesOffset] = useState(0); // mes actual = 0
   const [showComposeMensaje, setShowComposeMensaje] = useState(false);
   const [composeMensaje, setComposeMensaje] = useState({
     destinatarios: [],
@@ -13131,6 +13425,57 @@ export default function App() {
       _syncStatusCallback = null;
     };
   }, []);
+
+  // ══ POLLING DE PERMISOS: recarga usersList desde Supabase cada 30 seg ══════
+  // Garantiza que los cambios del admin se apliquen en tiempo real para cualquier
+  // usuario activo (especialmente secretarias cuyo admin modifica sus permisos)
+  useEffect(() => {
+    if (!currentUser) return; // solo si hay sesión activa
+    const _reloadUsersFromCloud = async () => {
+      try {
+        // Estrategia 1: clave dedicada de permisos (más ligera, solo para secretaria)
+        if (currentUser.role === "secretaria") {
+          const permKey = `siso_permisos_${currentUser.user}`;
+          const r = await fetch(
+            `${_SB_URL}/rest/v1/siso_store?key=eq.${encodeURIComponent(permKey)}&select=value,updated_at`,
+            { headers: _SB_HEADERS }
+          );
+          if (r.ok) {
+            const rows = await r.json();
+            if (rows && rows.length > 0 && rows[0].value) {
+              const permData = rows[0].value;
+              const localRaw = _ls.getItem(permKey);
+              const localData = localRaw ? JSON.parse(localRaw) : null;
+              // Solo actualizar si hay cambios nuevos
+              if (!localData || permData.updatedAt !== localData.updatedAt) {
+                _ls.setItem(permKey, JSON.stringify(permData));
+                // Actualizar usersList en memoria con los nuevos permisos
+                setUsersList(prev => prev.map(u =>
+                  u.user === currentUser.user
+                    ? { ...u, secretariaPermisos: permData.secretariaPermisos, medicosAsignados: permData.medicosAsignados }
+                    : u
+                ));
+                // Actualizar currentUser para que _secretariaPuede lo refleje inmediatamente
+                setCurrentUser(prev => ({
+                  ...prev,
+                  secretariaPermisos: permData.secretariaPermisos,
+                  medicosAsignados: permData.medicosAsignados,
+                }));
+              }
+            }
+          }
+          return; // para secretaria, la clave dedicada es suficiente
+        }
+        // Estrategia 2: para admin/médico, recargar siso_users completo (menos frecuente)
+        // Solo cuando la lista local parece desactualizada
+      } catch (_) { /* silencioso */ }
+    };
+    // Ejecutar inmediatamente al montar/cambiar currentUser
+    _reloadUsersFromCloud();
+    // Polling cada 30 segundos mientras la sesión esté activa
+    const _pollInterval = setInterval(_reloadUsersFromCloud, 30000);
+    return () => clearInterval(_pollInterval);
+  }, [currentUser?.user]); // eslint-disable-line react-hooks/exhaustive-deps
   // ══ B-09: Seguridad de cabeceras ═══════════════════════════════════════════
   // NOTA: El meta CSP ha sido eliminado porque causa el error 'unsafe-eval'.
   // Razón técnica: CodeSandbox/React/Babel usan eval() internamente para el
@@ -13307,24 +13652,68 @@ export default function App() {
       setPatientsList(sp(_patKey(sessionUser), []));
     }
     // NO cargar 'siso_db_patients' genérico - mezclaria pacientes de todos los médicos
-    // ══ RECUPERACIÓN: Si usuario guardado tiene passHash vacío (post B-03), restaurar desde initialUsers ══
+    // ══ FIX DEFINITIVO: Cargar usuarios con persistencia real ══
     const storedUsers = sp("siso_users", null);
-    if (storedUsers && Array.isArray(storedUsers)) {
+    if (storedUsers && Array.isArray(storedUsers) && storedUsers.length > 0) {
       const fixed = storedUsers.map((u) => {
         const init = initialUsers.find((i) => i.user === u.user);
-        // Recuperar passHash vacío
         if (!u.passHash && init) {
           return { ...u, passHash: init.passHash, mustChangePassword: true };
         }
-        // Migración: si doctorData.nombre está vacío, rellenar desde initialUsers (primera carga)
         if (init && init.doctorData?.nombre && !u.doctorData?.nombre) {
           return { ...u, doctorData: { ...init.doctorData, ...(u.doctorData || {}) } };
         }
         return u;
       });
       setUsersList(fixed);
+      setUsersReady(true);
     } else {
-      setUsersList(initialUsers);
+      // ══ Cache vacío — ESPERAR a Supabase antes de permitir login ══
+      (async () => {
+        try {
+          // Timeout de 8 segundos para no bloquear la UI si no hay internet
+          const cloud = await Promise.race([
+            _sbGetAll(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000))
+          ]);
+          if (cloud && cloud["siso_users"]?.value && Array.isArray(cloud["siso_users"].value) && cloud["siso_users"].value.length > 0) {
+            let cloudUsers = cloud["siso_users"].value;
+            // ══ MERGE: para cada usuario, verificar si hay doctorData dedicada más reciente ══
+            cloudUsers = cloudUsers.map(u => {
+              const dedicatedDD = cloud[`siso_doctor_data_${u.user}`]?.value;
+              if (dedicatedDD && typeof dedicatedDD === "object") {
+                return { ...u, doctorData: { ...(u.doctorData || {}), ...dedicatedDD } };
+              }
+              return u;
+            });
+            setUsersList(cloudUsers);
+            _ls.setItem("siso_users", JSON.stringify(cloudUsers));
+            // También restaurar firma, empresas y otros datos del médico
+            if (cloud["siso_doctor_signature"]?.value) {
+              setDoctorSignature(cloud["siso_doctor_signature"].value);
+              _ls.setItem("siso_doctor_signature", cloud["siso_doctor_signature"].value);
+            }
+            if (cloud["siso_companies"]?.value && Array.isArray(cloud["siso_companies"].value)) {
+              setCompanies(cloud["siso_companies"].value);
+              _ls.setItem("siso_companies", JSON.stringify(cloud["siso_companies"].value));
+            }
+            // Restaurar AI config
+            if (cloud["siso_ai_config_provider"]?.value) {
+              const prov = cloud["siso_ai_config_provider"].value;
+              setAiConfig(prev => ({ ...prev, activeProvider: prov.activeProvider || prev.activeProvider }));
+              _ls.setItem("siso_ai_config_provider", JSON.stringify(prov));
+            }
+            console.log("[SISO] ✅ Usuarios y datos restaurados desde Supabase:", cloudUsers.length);
+          } else {
+            setUsersList(initialUsers);
+          }
+        } catch (err) {
+          console.warn("[SISO] No se pudo restaurar desde nube, usando defaults:", err);
+          setUsersList(initialUsers);
+        } finally {
+          setUsersReady(true);
+        }
+      })();
     }
     setSavedReports(sp("siso_saved_reports", []));
     setMensajes(sp("siso_mensajes", []));
@@ -13354,7 +13743,11 @@ export default function App() {
     const savedProvider = sp("siso_ai_config_provider", {
       activeProvider: "gemini",
     });
-    const savedKeys = sps("siso_ai_keys", emptyKeys);
+    // Cargar keys: 1) localStorage por usuario, 2) localStorage genérico, 3) sessionStorage, 4) vacío
+    const _initUser = (() => { try { const s = JSON.parse(_ls.getItem("siso_session") || "null"); return s?.user; } catch { return null; } })();
+    const savedKeysLS = _initUser ? sp("siso_ai_keys_" + _initUser, null) : null;
+    const savedKeysSS = sps("siso_ai_keys", emptyKeys);
+    const savedKeys = savedKeysLS || savedKeysSS;
     const mergedKeys = { ...emptyKeys, ...savedKeys };
     _ls.setItem("siso_ai_config_version", AI_CONFIG_VERSION);
     setAiConfig({
@@ -13400,14 +13793,29 @@ export default function App() {
         [],
         "siso_atenciones_cerradas"
       );
-      // Usuarios: merge - agregar los que no existen localmente
+      // Usuarios: PREFERIR datos de nube sobre initialUsers (FIX: persistencia de contraseña y datos médico)
       if (
         cloud["siso_users"]?.value &&
-        Array.isArray(cloud["siso_users"].value)
+        Array.isArray(cloud["siso_users"].value) &&
+        cloud["siso_users"].value.length > 0
       ) {
         const cloudUsers = cloud["siso_users"].value;
         setUsersList((prev) => {
-          const merged = [...prev];
+          // Cloud users take priority - update existing + add new
+          const merged = prev.map((localUser) => {
+            const cloudVersion = cloudUsers.find((cu) => cu.user === localUser.user);
+            if (cloudVersion) {
+              // Cloud tiene este usuario - usar datos de nube (contraseña, doctorData, etc.)
+              return {
+                ...localUser,
+                ...cloudVersion,
+                // Preservar campos estructurales del initialUsers si no existen en cloud
+                id: localUser.id || cloudVersion.id,
+              };
+            }
+            return localUser;
+          });
+          // Agregar usuarios que solo existen en nube
           cloudUsers.forEach((cu) => {
             if (!merged.find((u) => u.user === cu.user)) merged.push(cu);
           });
@@ -13464,6 +13872,27 @@ export default function App() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [_hcDirty, view]);
+  // ── AUTOGUARDADO LOCAL cada 15 segundos ─────────────────────────────────
+  useEffect(() => {
+    if (view !== "historia" || !data.nombres) return;
+    const autoSaveInterval = setInterval(() => {
+      const saveData = { ...data, _autoSaved: new Date().toISOString(), _userId: currentUser?.user };
+      _ls.setItem("siso_active_form", JSON.stringify(saveData));
+      _ls.setItem("siso_autosave_" + (data.id || "new"), JSON.stringify(saveData));
+    }, 15000);
+    return () => clearInterval(autoSaveInterval);
+  }, [view, data, currentUser]);
+  // ── SYNC A SUPABASE cada 60 segundos ────────────────────────────────────
+  useEffect(() => {
+    if (view !== "historia" || !data.id || !data.nombres) return;
+    const cloudSaveInterval = setInterval(() => {
+      if (_hcDirty) {
+        const key = "siso_autosave_cloud_" + (currentUser?.user || "anon") + "_" + data.id;
+        _sbSet(key, { ...data, _cloudSaved: new Date().toISOString() });
+      }
+    }, 60000);
+    return () => clearInterval(cloudSaveInterval);
+  }, [view, data, _hcDirty, currentUser]);
   // Auto-IMC
   useEffect(() => {
     if (data.peso && data.talla) {
@@ -13511,6 +13940,10 @@ export default function App() {
         ];
         if (doctorSignature)
           tasks.push(_sbSet("siso_doctor_signature", doctorSignature));
+        // FIX: Guardar doctorData del usuario actual como clave dedicada
+        if (currentUser?.doctorData && currentUser?.user) {
+          tasks.push(_sbSet(`siso_doctor_data_${currentUser.user}`, currentUser.doctorData));
+        }
         // Bloque 3: módulos que antes solo vivían en localStorage
         const _u = currentUser?.user || "shared";
         if (cajaMovimientos?.length)
@@ -13572,6 +14005,47 @@ export default function App() {
     savedReports,
     aiConfig,
   ]);
+  // ── FIX: Auto-expandir textareas al escribir (delegación global) ──
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.target.tagName === "TEXTAREA") {
+        e.target.style.height = "auto";
+        e.target.style.height = e.target.scrollHeight + "px";
+      }
+    };
+    document.addEventListener("input", handler);
+    return () => document.removeEventListener("input", handler);
+  }, []);
+  // ── SEC-F1-05: Prevenir pérdida de datos al cerrar pestaña ──
+  useEffect(() => {
+    const handler = (e) => {
+      if (_hcDirty && view === "historia") {
+        e.preventDefault();
+        e.returnValue = "Tiene cambios sin guardar en la historia clínica. ¿Desea salir?";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [_hcDirty, view]);
+  // ── SEC-F1-06: Timeout de sesión inactiva (30 min) ──
+  useEffect(() => {
+    if (!currentUser) return;
+    const resetTimer = () => _resetSessionTimer(() => {
+      showAlert("⏰ Sesión expirada por inactividad (30 minutos).\nSus datos están guardados. Debe iniciar sesión nuevamente.");
+      setCurrentUser(null);
+      _ls.removeItem("siso_session");
+      setView("login");
+      _auditLog("SessionTimeout", currentUser?.user, "Sesión expirada por inactividad 30 min");
+    });
+    resetTimer();
+    const events = ["mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach(ev => window.addEventListener(ev, resetTimer, { passive: true }));
+    return () => {
+      _clearSessionTimer();
+      events.forEach(ev => window.removeEventListener(ev, resetTimer));
+    };
+  }, [currentUser]);
   // ── PERSISTENCIA DE VISTA Y SESIÓN: guarda la vista activa y usuario para restaurar al recargar
   useEffect(() => {
     if (currentUser && view !== "login") {
@@ -13779,9 +14253,18 @@ Hábitos: Tabaquismo ${data.habitos?.fuma} | Alcohol ${
 CONTEXTO ESPECÍFICO DEL TIPO DE EXAMEN: ${_contextoTipo}
 CRITERIOS OBLIGATORIOS: 1) El concepto de aptitud debe citar el artículo de la Res. 1843/2025 correspondiente (norma vigente desde 29 abril 2025 - Res. 2346/2007 derogada). 2) Si es egreso o post-incapacidad, incluir análisis de reintegro laboral. 3) Las restricciones deben ser operativas, cuantificables y con base normativa (GTC-45, GATISO). 4) Las recomendaciones deben ser específicas para el cargo y los riesgos, no genéricas, y deben responder al contexto del tipo de examen indicado arriba.
 JSON REQUERIDO (sin markdown, sin texto adicional):
-{"diagnosticoPrincipal":"Z10.0 - EXAMEN MÉDICO OCUPACIONAL","diagnosticoSecundario1":"CIE-10 - Hallazgo clínico identificado o cadena vacía","diagnosticoSecundario2":"CIE-10 - Segundo hallazgo o cadena vacía","conceptoAptitud":"Concepto de aptitud laboral (APTO/APTO CON RESTRICCIONES/NO APTO) con justificación cargo-hallazgos. NO mencionar diagnósticos específicos, medicamentos, ni tratamientos. Solo aptitud y condiciones laborales. Conforme Res. 1843/2025 Art. 20","vigencia":"X meses con justificación clínica","recomendaciones":"Mínimo 10 recomendaciones de medicina preventiva y salud ocupacional enfocadas en cargo y riesgos. NO incluir medicamentos ni tratamiento farmacológico. NO referir tratamiento médico actual","restriccionesTexto":"Restricciones médico-laborales operativas y cuantificables (mínimo 5 si hay hallazgos), formato: [TIPO] (Segmento) Descripción - Base legal","derivaciones":[{"especialidad":"Especialidad médica requerida","motivo":"Motivo clínico concreto","urgencia":"Electiva"}],"examenesSugeridos":["Examen paraclínico 1"],"interconsultaResumen":"Resumen clínico para interconsulta o cadena vacía","incapacidadSugerida":{"aplica":false,"dias":0,"motivo":"","diagnosticoCIE":""}}`;
-    try {
-      const text = await callAI(prompt, true);
+{"diagnosticoPrincipal":"Z10.0 - EXAMEN MÉDICO OCUPACIONAL","diagnosticoSecundario1":"CIE-10 - Hallazgo clínico identificado o cadena vacía","diagnosticoSecundario2":"CIE-10 - Segundo hallazgo o cadena vacía","conceptoAptitud":"Concepto de aptitud laboral (APTO/APTO CON RESTRICCIONES/NO APTO) con justificación cargo-hallazgos. NO mencionar diagnósticos específicos, medicamentos, ni tratamientos. Solo aptitud y condiciones laborales. Conforme Res. 1843/2025 Art. 20","vigencia":"X meses con justificación clínica","recomendaciones":"Mínimo 10 recomendaciones de medicina preventiva y salud ocupacional enfocadas en cargo y riesgos. NO incluir medicamentos ni tratamiento farmacológico. NO referir tratamiento médico actual","restriccionesTexto":"Restricciones médico-laborales operativas y cuantificables (mínimo 5 si hay hallazgos), formato: [TIPO] (Segmento) Descripción - Base legal","derivaciones":[{"especialidad":"Especialidad médica requerida","motivo":"Motivo clínico concreto","urgencia":"Electiva"}],"examenesSugeridos":["Examen paraclínico 1"],"interconsultaResumen":"Resumen clínico para interconsulta o cadena vacía","incapacidadSugerida":{"aplica":false,"dias":0,"motivo":"","diagnosticoCIE":""},"analisisClinico":"Análisis clínico detallado con lenguaje técnico-formal de médico especialista en medicina laboral con más de 15 años de experiencia. Incluir: interpretación de hallazgos, correlación cargo-riesgos ocupacionales, referencias a normativa colombiana (Dec. 1072/2015, Res. 2346/2007, Res. 1843/2025). Mínimo 200 palabras.","sveRecomendado":["SVE Osteomuscular si aplica según GATISO-DME Res. 2844/2007","SVE Psicosocial si aplica según Res. 2764/2022","SVE Visual / SVE Respiratorio / SVE Neurológico / SVE Dermatológico según hallazgos"]}`;    try {
+      let text;
+      try {
+        text = await callAI(prompt, true);
+      } catch (e1) {
+        try {
+          const retryPrompt = "Analiza esta HC ocupacional y devuelve JSON: " + JSON.stringify({cargo: data.cargo, hallazgos, antecedentes, riesgos, edad: data.edad, tipoExamen: data.tipoExamen});
+          text = await callAI(retryPrompt, true);
+        } catch (e2) {
+          throw e1;
+        }
+      }
       const parsed = parseAIJSON(text);
       // Para énfasis OCUPACIONAL: diagnóstico principal siempre Z10.0 (examen ocupacional)
       // Los diagnósticos encontrados pasan a secundarios
@@ -13847,13 +14330,27 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
         }));
       }
       if (parsed.examenesSugeridos?.length > 0) {
-        setData((prev) => ({
-          ...prev,
-          paraclinicosCheck: {
-            ...(prev.paraclinicosCheck || {}),
-            _aiSugeridos: parsed.examenesSugeridos.join("\n"),
-          },
-        }));
+        setData((prev) => {
+          const existingExams = prev.solicitudExamenes || [];
+          const existingNames = new Set(existingExams.map(e => (e.nombre || '').toLowerCase()));
+          const newAIExams = parsed.examenesSugeridos
+            .filter(name => !existingNames.has(name.toLowerCase()))
+            .map(name => ({
+              nombre: name,
+              fecha: new Date().toISOString().split("T")[0],
+              urgente: false,
+              incluirEnRecomendaciones: false,
+              _fromAI: true,
+            }));
+          return {
+            ...prev,
+            solicitudExamenes: [...existingExams, ...newAIExams],
+            paraclinicosCheck: {
+              ...(prev.paraclinicosCheck || {}),
+              _aiSugeridos: parsed.examenesSugeridos.join("\n"),
+            },
+          };
+        });
       }
       if (
         parsed.incapacidadSugerida?.aplica &&
@@ -13876,6 +14373,20 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
           },
         }));
       }
+      // ── Guardar Análisis Clínico IA (campo independiente) ──
+      if (parsed.analisisClinico) {
+        setData((prev) => ({
+          ...prev,
+          analisisIA: parsed.analisisClinico,
+        }));
+      }
+      // ── Guardar SVE Recomendado por IA ──
+      if (parsed.sveRecomendado?.length > 0) {
+        setData((prev) => ({
+          ...prev,
+          sveRecomendado: parsed.sveRecomendado.filter(s => s && !s.includes("si aplica")),
+        }));
+      }
       const extraMsg = [
         parsed.derivaciones?.length > 0
           ? `\n• ${parsed.derivaciones.length} derivación(es) sugerida(s)`
@@ -13885,6 +14396,12 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
           : "",
         parsed.incapacidadSugerida?.aplica
           ? `\n• Incapacidad sugerida: ${parsed.incapacidadSugerida.dias} días`
+          : "",
+        parsed.analisisClinico
+          ? `\n• Análisis clínico generado`
+          : "",
+        parsed.sveRecomendado?.length > 0
+          ? `\n• ${parsed.sveRecomendado.filter(s => s && !s.includes("si aplica")).length} SVE sugerido(s)`
           : "",
       ].join("");
       showAlert(
@@ -13927,18 +14444,17 @@ Maniobras osteomusculares positivas: ${osteo || "Ninguna"}
 IMC: ${data.imc} | TA: ${data.ta} | Diagnóstico principal: ${
       data.diagnosticoPrincipal
     }
-INSTRUCCIÓN: Las restricciones deben ser operativas, cuantificables (en kg, min, grados o frecuencias), con segmento anatómico identificado, tipo (TEMPORAL/PERMANENTE/PREVENTIVA), duración si temporal, y base normativa. Si el examen es egreso, post-incapacidad o retorno-laboral (Res. 1843/2025 Art. 13), incluir restricciones de reintegro progresivo.
+INSTRUCCIÓN: Las restricciones deben ser operativas, cuantificables (en kg, min, grados o frecuencias), con segmento anatómico identificado, tipo (TEMPORAL/PERMANENTE/PREVENTIVA), duración si temporal (ej: "Temporal 30 días", "Permanente"), y base normativa. Si el examen es egreso, post-incapacidad o retorno-laboral (Res. 1843/2025 Art. 13), incluir restricciones de reintegro progresivo.
+FORMATO DESEADO: [TIPO: Temporal X días / Permanente] (Segmento) Descripción — Normativa
 JSON REQUERIDO (sin markdown):
-{"restricciones":[{"segmento":"Miembro Superior/Lumbar/Cervical/Postural/General","tipo":"TEMPORAL/PERMANENTE/PREVENTIVA","duracion":"X semanas o N/A","descripcion":"Restricción específica, operativa y cuantificable para el puesto de trabajo","normativa":"GTC-45:2012 / GATISO-DME / GATISO-TME / Res. 1843/2025 / Res. 2404/2019"}]}`;
+{"restricciones":[{"segmento":"Miembro Superior/Lumbar/Cervical/Postural/General","tipo":"TEMPORAL/PERMANENTE/PREVENTIVA","duracion":"X semanas o N/A","texto":"Restricción específica, operativa y cuantificable para el puesto de trabajo","normativa":"GTC-45:2012 / GATISO-DME / GATISO-TME / Res. 1843/2025 / Res. 2404/2019"}]}`;
     try {
       const text = await callAI(prompt, true);
       const parsed = parseAIJSON(text);
       const lista = (parsed.restricciones || [])
         .map(
           (r, i) =>
-            `${i + 1}. [${r.tipo}${
-              r.duracion && r.duracion !== "N/A" ? " - " + r.duracion : ""
-            }] (${r.segmento}) ${r.descripcion} -- ${r.normativa}`
+            `${i + 1}. [${(r.tipo || "TEMPORAL").toUpperCase()}${r.duracion && r.duracion !== "N/A" ? " - " + r.duracion : ""}] (${r.segmento || "General"}) ${r.texto || r.descripcion} — ${r.normativa || "Res. 1843/2025"}`
         )
         .join("\n");
       setData((prev) => ({ ...prev, analisisRestricciones: lista }));
@@ -14099,13 +14615,15 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
       '"pveRecomendados":["PVE Osteomuscular - Res.2404/2019","PVE Cardiovascular - Res.2404/2019","PVE Psicosocial - Res.2404/2019","PVE Auditivo - Res.2400/1979","PVE Visual - Res.2400/1979"],' +
       '"tabla":[{"diagnostico":"CIE-10 descripción","cantidad":0,"porcentaje":"0%","relacion":"probable/posible/no relacionado"}],' +
       '"matrizLegalNormativa":"Res.1843/2025, Dec.1072/2015, Res.0312/2019, Ley 1562/2012, Res.2404/2019 - cumplimiento verificado."}';
-    // LLAMADA 2 - solo conclusiones (campo largo independiente)
+    // LLAMADA 2 - conclusiones + análisis justificado + recomendaciones (Punto 11)
     const prompt2 =
-      "Médico especialista Medicina del Trabajo Colombia (Res.1843/2025, Dec.1072/2015, GTC-45:2012). Datos:\n" +
+      "Eres médico especialista en Medicina del Trabajo y Salud Ocupacional en Colombia con más de 15 años de experiencia (Res.1843/2025, Dec.1072/2015, Res.0312/2019, GTC-45:2012). Datos:\n" +
       datosBase +
-      "\n\nElabora informe técnico con 8 secciones (máx 100 palabras/sección):" +
-      "1.Perfil sociodemográfico 2.Perfil ocupacional 3.Morbilidad prevalente CIE-10 4.Hallazgos clínicos críticos 5.Antecedentes y revisión sistemas 6.Riesgos laborales GTC-45 7.Estilos de vida 8.PVE y conclusión." +
-      '\n\nDevuelve ÚNICAMENTE JSON: {"conclusiones":"texto sección 1\\n\\ntexto sección 2\\n\\n..."}';
+      "\n\nElabora un informe técnico-epidemiológico completo con las siguientes 3 secciones:" +
+      "\n\n1. ANÁLISIS JUSTIFICADO (mínimo 300 palabras): Interpretación epidemiológica de los resultados colectivos. Prevalencia de patologías con soporte estadístico. Distribución por cargo/área. Factores de riesgo identificados según GTC-45. Correlación entre morbilidad encontrada y exposición ocupacional. Mención de normativa aplicable." +
+      "\n\n2. CONCLUSIONES (mínimo 200 palabras): Resumen ejecutivo de los hallazgos más relevantes. Indicadores epidemiológicos críticos. Nivel de cumplimiento del SG-SST. Riesgos prioritarios identificados." +
+      "\n\n3. RECOMENDACIONES (mínimo 250 palabras): Acciones correctivas específicas. Programas de vigilancia epidemiológica (PVE/SVE) sugeridos con base normativa. Ajustes en el SG-SST conforme Res. 0312/2019. Seguimiento médico prioritario por grupos de riesgo. Cronograma sugerido de intervenciones." +
+      '\n\nDevuelve ÚNICAMENTE JSON válido sin markdown: {"analisisJustificado":"texto completo sección 1","conclusiones":"texto completo sección 2","recomendacionesInforme":"texto completo sección 3"}';
     try {
       const [text1, text2] = await Promise.all([
         callAI(prompt1, true),
@@ -14113,7 +14631,7 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
       ]);
       const parte1 = parseAIJSON(text1);
       const parte2 = parseAIJSON(text2);
-      setReportAIResult({ ...parte1, conclusiones: parte2.conclusiones || "" });
+      setReportAIResult({ ...parte1, conclusiones: parte2.conclusiones || "", analisisJustificado: parte2.analisisJustificado || "", recomendacionesInforme: parte2.recomendacionesInforme || "" });
     } catch (e) {
       showAlert(`⚠️ Error IA Reporte: ${e.message}`);
     } finally {
@@ -14134,6 +14652,7 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
     const keysGuardadas = Object.entries(currentKeys)
       .filter(([, v]) => v && v.length > 8)
       .map(([k]) => k);
+    const _bkSuf = currentUser?.empresaId ? "empresa_" + currentUser.empresaId : currentUser?.user || "shared";
     const tasks = {
       [`Pacientes / HC (${currentUser?.user})`]: _sbSet(
         _patKeyCloud(currentUser?.user || "shared"),
@@ -14141,14 +14660,20 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
       ),
       Empresas: _sbSet(_compKeyCloud(currentUser?.user || "shared"), companies),
       "Usuarios y perfiles": _sbSet("siso_users", usersList),
-      "Facturas / Cuentas de cobro": _sbSet("siso_saved_bills", savedBillsList),
+      "Facturas / Cuentas de cobro": _sbSet(`siso_saved_bills_${_bkSuf}`, savedBillsList),
       "Informes guardados": _sbSet("siso_saved_reports", savedReports),
       "Log de auditoría": _sbSet("siso_audit_log", auditLog),
+      "Mensajes internos": _sbSet("siso_mensajes", mensajes),
+      "Agenda / Citas": _sbSet(`siso_agendados_${_bkSuf}`, agendados),
+      "Atenciones cerradas": _sbSet(`siso_atenciones_${_bkSuf}`, atencionesCerradas),
       "Configuración IA (proveedor)": _sbSet("siso_ai_config_provider", {
         activeProvider: aiConfig.activeProvider,
       }),
       ...(doctorSignature
         ? { "Firma digital": _sbSet("siso_doctor_signature", doctorSignature) }
+        : {}),
+      ...(currentUser?.doctorData && currentUser?.user
+        ? { [`Datos médico (${currentUser.user})`]: _sbSet(`siso_doctor_data_${currentUser.user}`, currentUser.doctorData) }
         : {}),
       ...(currentUser?.user && keysGuardadas.length
         ? {
@@ -14188,19 +14713,22 @@ JSON REQUERIDO (sin markdown, sin texto adicional):
   };
   const handleSaveAIConfig = (cfg) => {
     setAiConfig(cfg);
-    // Keys en sessionStorage (seguridad) + Supabase (persistencia por usuario)
+    const uid = currentUser?.user || "default";
     const keysJson = JSON.stringify(cfg.keys || {});
+    // Guardar en sessionStorage (sesión actual)
     _ss.setItem("siso_ai_keys", keysJson);
-    _sync(
-      "siso_ai_config_provider",
-      JSON.stringify({ activeProvider: cfg.activeProvider })
-    );
-    // Guardar keys en Supabase bajo clave específica del usuario
-    const userKey = `siso_ai_keys_${currentUser?.user || "default"}`;
+    _ss.setItem("siso_ai_keys_" + uid, keysJson);
+    // Guardar en localStorage (PERSISTENTE — sobrevive al cerrar navegador)
+    _ls.setItem("siso_ai_keys_" + uid, keysJson);
+    _ls.setItem("siso_ai_keys", keysJson);
+    // Guardar proveedor activo
+    _sync("siso_ai_config_provider", JSON.stringify({ activeProvider: cfg.activeProvider }));
+    _ls.setItem("siso_ai_config_provider_" + uid, JSON.stringify({ activeProvider: cfg.activeProvider }));
+    // Guardar en Supabase (persistencia en la nube — cualquier dispositivo)
+    const userKey = "siso_ai_keys_" + uid;
     _sbSet(userKey, cfg.keys || {}).then(() => {});
-    // También guardar en localStorage para fallback offline
     _ls.setItem("siso_ai_config_version", "v3");
-    showAlert("✅ Configuración de IA guardada en la nube.");
+    showAlert("✅ API Keys guardadas. Estarán disponibles en cualquier dispositivo y sesión.");
   };
   
 const handleLogin = (u, p) => {
@@ -14239,30 +14767,54 @@ const handleLogin = (u, p) => {
           }
         }
       }
-                // CAMBIO 7 - SEC: Fallback a Supabase si usuario no hallado en lista local
-                          // Resuelve el caso de nuevo dispositivo / caché borrado / contraseña cambiada
-                                    if (!found) {
-                                                  const cloudData = await _sbGetAll();
-                                                              if (cloudData?.["siso_users"]?.value && Array.isArray(cloudData["siso_users"].value)) {
-                                                                              const cloudUserList = cloudData["siso_users"].value;
-                                                                                            // Sincronizar lista local con datos de Supabase
-                                                                                                          setUsersList(prev => {
-                                                                                                                            const merged = [...prev];
-                                                                                                                                            cloudUserList.forEach(cu => {
-                                                                                                                                                                if (!merged.find(m => m.user === cu.user)) merged.push(cu);
-                                                                                                                                                                                });
-                                                                                                                                                                                                _ls.setItem("siso_users", JSON.stringify(merged));
-                                                                                                                                                                                                                return merged;
-                                                                                                                                                                                                                              });
-                                                                                                                                                                                                                                            // Re-verificar credenciales contra lista de Supabase
-                                                                                                                                                                                                                                                          for (const x of cloudUserList) {
-                                                                                                                                                                                                                                                                            if (x.user === u) {
-                                                                                                                                                                                                                                                                                                const ok = await _verifyPassword(p, x.passHash, x.passSalt);
-                                                                                                                                                                                                                                                                                                                  if (ok) { found = x; break; }
-                                                                                                                                                                                                                                                                                                                                  }
-                                                                                                                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                                                                                                                            }
-                                                                                                                                                                                                                                                                                                                                                                      }
+      // CAMBIO 7 - SEC: Fallback a Supabase si usuario no hallado en lista local
+      // Resuelve el caso de nuevo dispositivo / caché borrado / contraseña cambiada
+      if (!found) {
+        try {
+          const cloudData = await _sbGetAll();
+          if (cloudData?.["siso_users"]?.value && Array.isArray(cloudData["siso_users"].value)) {
+            const cloudUserList = cloudData["siso_users"].value;
+            // FIX: REEMPLAZAR usuarios locales con datos de nube (no solo agregar faltantes)
+            setUsersList(() => {
+              _ls.setItem("siso_users", JSON.stringify(cloudUserList));
+              return cloudUserList;
+            });
+            // También restaurar firma y empresas desde nube
+            if (cloudData["siso_doctor_signature"]?.value) {
+              setDoctorSignature(cloudData["siso_doctor_signature"].value);
+              _ls.setItem("siso_doctor_signature", cloudData["siso_doctor_signature"].value);
+            }
+            if (cloudData["siso_companies"]?.value && Array.isArray(cloudData["siso_companies"].value)) {
+              setCompanies(cloudData["siso_companies"].value);
+              _ls.setItem("siso_companies", JSON.stringify(cloudData["siso_companies"].value));
+            }
+            // Re-verificar credenciales contra lista de Supabase
+            for (const x of cloudUserList) {
+              if (x.user === u) {
+                const ok = await _verifyPassword(p, x.passHash, x.passSalt);
+                if (ok) {
+                  // Merge doctorData dedicada si existe
+                  const dedicatedDD = cloudData[`siso_doctor_data_${x.user}`]?.value;
+                  found = dedicatedDD && typeof dedicatedDD === "object"
+                    ? { ...x, doctorData: { ...(x.doctorData || {}), ...dedicatedDD } }
+                    : x;
+                  break;
+                }
+              }
+            }
+            // Restaurar AI keys si existen
+            if (found) {
+              const aiKeysCloud = cloudData[`siso_ai_keys_${found.user}`]?.value;
+              if (aiKeysCloud && typeof aiKeysCloud === "object") {
+                _ss.setItem("siso_ai_keys", JSON.stringify(aiKeysCloud));
+                setAiConfig(prev => ({ ...prev, keys: aiKeysCloud }));
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("[SISO] Error en fallback Supabase login:", err);
+        }
+      }
       if (found && found.activo === false) {
         showAlert(
           "⛔ Esta cuenta está desactivada. Contacte al administrador."
@@ -14292,7 +14844,40 @@ const handleLogin = (u, p) => {
           ? found
           : { ...found, orgId: ORG_DEFAULT_ID };
         const foundConSesion = { ...foundConOrg, sesionId: sesId };
-        setCurrentUser(foundConSesion);
+        // ── Para secretaria: cargar permisos actualizados desde Supabase al login ──
+        // Esto garantiza que los permisos del admin estén vigentes desde el primer momento
+        const _initWithPermisos = async (baseSesion) => {
+          if (baseSesion.role === "secretaria") {
+            try {
+              const permKey = `siso_permisos_${baseSesion.user}`;
+              const r = await fetch(
+                `${_SB_URL}/rest/v1/siso_store?key=eq.${encodeURIComponent(permKey)}&select=value`,
+                { headers: _SB_HEADERS }
+              );
+              if (r.ok) {
+                const rows = await r.json();
+                if (rows && rows.length > 0 && rows[0].value) {
+                  const permData = rows[0].value;
+                  _ls.setItem(permKey, JSON.stringify(permData));
+                  // Fusionar permisos frescos de Supabase con el objeto de sesión
+                  const sesionConPermisos = {
+                    ...baseSesion,
+                    secretariaPermisos: permData.secretariaPermisos || baseSesion.secretariaPermisos,
+                    medicosAsignados: permData.medicosAsignados || baseSesion.medicosAsignados || [],
+                  };
+                  setCurrentUser(sesionConPermisos);
+                  // También actualizar usersList local
+                  setUsersList(prev => prev.map(u =>
+                    u.user === baseSesion.user ? { ...u, ...sesionConPermisos } : u
+                  ));
+                  return;
+                }
+              }
+            } catch (_) { /* silencioso, usar permisos locales */ }
+          }
+          setCurrentUser(baseSesion);
+        };
+        _initWithPermisos(foundConSesion);
         // CIBERSEGURIDAD: Activar timer de sesión 30 min (Punto 4 - Supabase/sesión segura)
         _resetSessionTimer(() => {
           setCurrentUser(null);
@@ -14410,6 +14995,7 @@ const handleLogin = (u, p) => {
           _loadScoped(`siso_saved_bills_${_storageUserId}`, "siso_saved_bills")
         );
         _sbGetAll().then((cloud) => {
+          if (!cloud) return;
           // Pacientes del usuario específico (o empresa compartida)
           const cloudPats = cloud?.[userPatKeyCloud]?.value;
           const currentLocalPats = sp(userPatKey, []);
@@ -14443,11 +15029,62 @@ const handleLogin = (u, p) => {
               }
             }
           }
-          // API keys del usuario
+          // ══ FIX DEFINITIVO: Restaurar TODOS los datos del usuario desde Supabase ══
+          // 1. API keys del usuario
           const aiKeyCloud = cloud?.[`siso_ai_keys_${found.user}`]?.value;
-          if (aiKeyCloud) {
-            _ss.setItem("siso_ai_keys", JSON.stringify(aiKeyCloud));
-            setAiConfig((prev) => ({ ...prev, keys: aiKeyCloud }));
+          if (aiKeyCloud && typeof aiKeyCloud === "object" && Object.values(aiKeyCloud).some(v => v)) {
+            const aiKeysStr = JSON.stringify(aiKeyCloud);
+            _ss.setItem("siso_ai_keys", aiKeysStr);
+            _ss.setItem("siso_ai_keys_" + found.user, aiKeysStr);
+            // PERSISTIR en localStorage para futuras sesiones
+            _ls.setItem("siso_ai_keys_" + found.user, aiKeysStr);
+            _ls.setItem("siso_ai_keys", aiKeysStr);
+            setAiConfig((prev) => ({ ...prev, keys: { groq:"", gemini:"", openrouter:"", together:"", ...aiKeyCloud } }));
+          }
+          // 2. DoctorData desde clave DEDICADA (siempre la más actualizada)
+          const doctorDataCloud = cloud?.[`siso_doctor_data_${found.user}`]?.value;
+          // 3. DoctorData desde siso_users (embebido en el array de usuarios)
+          const cloudUsersList = cloud?.["siso_users"]?.value;
+          const cloudUserEntry = Array.isArray(cloudUsersList)
+            ? cloudUsersList.find(u => u.user === found.user) : null;
+          // 4. Merge: prioridad = dedicado > embebido en users > local
+          const mergedDoctorData = {
+            ...(found.doctorData || {}),
+            ...(cloudUserEntry?.doctorData || {}),
+            ...(doctorDataCloud && typeof doctorDataCloud === "object" ? doctorDataCloud : {}),
+          };
+          const hasDoctorData = mergedDoctorData.nombre || mergedDoctorData.licencia || mergedDoctorData.cedula;
+          if (hasDoctorData) {
+            setCurrentUser((prev) => ({
+              ...prev,
+              doctorData: mergedDoctorData,
+            }));
+            // Persistir en usersList y localStorage para próxima carga
+            setUsersList((prev) => {
+              const updated = prev.map((u) =>
+                u.user === found.user ? { ...u, doctorData: mergedDoctorData } : u
+              );
+              _ls.setItem("siso_users", JSON.stringify(updated));
+              return updated;
+            });
+          }
+          // 5. Firma digital
+          if (cloud?.["siso_doctor_signature"]?.value) {
+            setDoctorSignature(cloud["siso_doctor_signature"].value);
+            _ls.setItem("siso_doctor_signature", cloud["siso_doctor_signature"].value);
+          }
+          // 6. Si el usuario en nube tiene firma embebida en doctorData
+          if (mergedDoctorData.signature && !doctorSignature) {
+            setDoctorSignature(mergedDoctorData.signature);
+          }
+          // 7. AI provider config
+          if (cloud?.["siso_ai_config_provider"]?.value) {
+            const prov = cloud["siso_ai_config_provider"].value;
+            setAiConfig((prev) => ({
+              ...prev,
+              activeProvider: prov.activeProvider || prev.activeProvider,
+            }));
+            _ls.setItem("siso_ai_config_provider", JSON.stringify(prov));
           }
         });
         // ══ B-07: Si primer login, forzar cambio de contraseña ══
@@ -14583,13 +15220,8 @@ const handleLogin = (u, p) => {
       return true;
     }
     if (currentUser.role === "secretaria") {
-      if (!_secretariaPuede("pacientes_lista", currentUser, usersList))
-        return false;
-      return _secretariaMedicoAsignado(
-        currentUser,
-        p._medicoId || "",
-        usersList
-      );
+      // Secretaria siempre puede ver pacientes de sus médicos asignados
+      return _secretariaMedicoAsignado(currentUser, p._medicoId || "", usersList);
     }
     return false;
   };
@@ -14606,6 +15238,32 @@ const handleLogin = (u, p) => {
         "⛔ No tiene permiso para ver esta historia clínica.\nSolo puede acceder a historias creadas por usted."
       );
       return;
+    }
+    // SECRETARIA: puede ver datos del paciente pero NO la ficha clínica
+    if (currentUser?.role === "secretaria") {
+      setShowSecretariaPatientModal(p);
+      return;
+    }
+    // ── Recuperación de autoguardado ──
+    const _autoRaw = _ls.getItem("siso_autosave_" + p.id);
+    if (_autoRaw) {
+      try {
+        const _autoData = JSON.parse(_autoRaw);
+        if (_autoData?._autoSaved) {
+          const autoTime = new Date(_autoData._autoSaved).getTime();
+          const now = Date.now();
+          if (now - autoTime < 86400000) {
+            if (window.confirm("Se encontraron datos autoguardados. ¿Desea recuperarlos?")) {
+              setData({ ...p, ..._autoData, id: p.id });
+              setDataType(p.type || "ocupacional");
+              setActiveTab(p.type === "general" ? "formGeneral" : "form");
+              _setHcDirty(true);
+              setView("historia");
+              return;
+            }
+          }
+        }
+      } catch(_) {}
     }
     setData(p);
     setDataType(p.type || "ocupacional");
@@ -15098,125 +15756,314 @@ const handleLogin = (u, p) => {
       showAlert("⛔ La secretaria no puede modificar historias clínicas.");
       return;
     }
-    // Selector de acción mediante showPrompt (selector de número)
-    showPrompt(
-      `📋 HC Cerrada - ${data.nombres}\nCódigo: ${
-        data.codigoVerificacion || "-"
-      }\n\nEscriba el número de la opción:\n1 - Evolución clínica + Re-emitir documentos\n2 - Nota Aclaratoria\n3 - Reapertura (solo Administrador)`,
-      (opcion) => {
-        const op = (opcion || "").trim();
-        if (op === "1") {
-          // Evolución - escribe nota clínica + puede re-emitir documentos bajo el mismo código
-          setShowEvolucionModal(true);
-        } else if (op === "2") {
-          // Nota aclaratoria
-          showPrompt(
-            "Escriba la nota aclaratoria (se registrará con su nombre, fecha y hora):",
-            (nota) => {
-              if (!nota || nota.trim().length < 10) {
-                showAlert("La nota debe tener al menos 10 caracteres.");
-                return;
-              }
-              const notaAclaratoria = {
-                id: Date.now(),
-                fecha: new Date().toISOString(),
-                autor: currentUser?.name || currentUser?.user,
-                rol: currentUser?.role,
-                contenido: nota.trim(),
-                hcId: data.id,
-                codigoHC:
-                  data.codigoVerificacion ||
-                  data.firmaDigital?.codigoQR ||
-                  "N/A",
-              };
-              setData((p) => ({
-                ...p,
-                notasAclaratorias: [
-                  ...(p.notasAclaratorias || []),
-                  notaAclaratoria,
-                ],
-              }));
-              setTimeout(() => {
-                const updPats = patientsList.map((p) =>
-                  p.id === data.id
-                    ? {
-                        ...p,
-                        notasAclaratorias: [
-                          ...(p.notasAclaratorias || []),
-                          notaAclaratoria,
-                        ],
-                      }
-                    : p
-                );
-                setPatientsList(updPats);
-                _sync(_patKey(currentUser?.user), JSON.stringify(updPats));
-              }, 0);
-              logAccess("NotaAclaratoria", data.id, dataType);
-              showAlert(
-                `✅ Nota aclaratoria registrada.\nAutor: ${
-                  notaAclaratoria.autor
-                }\nFecha: ${new Date(notaAclaratoria.fecha).toLocaleString(
-                  "es-CO"
-                )}\n\nLa HC original permanece intacta.`
-              );
-            }
-          );
-        } else if (op === "3") {
-          // Reapertura (solo admin)
-          if (currentUser?.role !== "administrador") {
-            showAlert(
-              "⛔ Solo el administrador puede reabrir una HC firmada.\nUse la opción 1 (Evolución) o 2 (Nota Aclaratoria)."
-            );
-            return;
+    const isAdminUser = _isAdmin(currentUser?.role) || currentUser?.role === "super_admin";
+    
+    // Usar confirmConfig con botones claros en lugar de input de número
+    setConfirmConfig({
+      msg: `📋 HC Cerrada — ${data.nombres}\nCódigo: ${data.codigoVerificacion || "—"}\n\n¿Qué desea hacer?`,
+      buttons: [
+        {
+          label: "📝 Evolución clínica",
+          color: "bg-purple-600 hover:bg-purple-700",
+          action: () => {
+            setConfirmConfig(null);
+            setShowEvolucionModal(true);
           }
-          showPrompt("Código de administrador:", (adminCode) => {
-            _sha256(adminCode).then((h) => {
-              const storedCode = _ls.getItem("siso_admin_code_hash") || "";
-              if (!storedCode) {
-                showAlert(
-                  "Configure el código de administrador primero desde el panel de usuarios."
-                );
-                return;
-              }
-              if (h !== storedCode) {
-                showAlert("⛔ Código incorrecto.");
-                return;
-              }
+        },
+        {
+          label: "📌 Nota Aclaratoria",
+          color: "bg-amber-600 hover:bg-amber-700",
+          action: () => {
+            setConfirmConfig(null);
+            setTimeout(() => {
               showPrompt(
-                "Motivo de reapertura (mín. 20 caracteres - queda en auditoría):",
-                (reason) => {
-                  if (!reason || reason.trim().length < 20) {
-                    showAlert("El motivo debe tener al menos 20 caracteres.");
+                "📌 Escriba la nota aclaratoria:\n(Se registrará con su nombre, fecha y hora en la HC)",
+                (nota) => {
+                  if (!nota || nota.trim().length < 10) {
+                    setTimeout(() => showAlert("La nota debe tener al menos 10 caracteres."), 100);
                     return;
                   }
+                  const notaObj = {
+                    id: Date.now(),
+                    fecha: new Date().toISOString(),
+                    autor: currentUser?.name || currentUser?.user,
+                    rol: currentUser?.role,
+                    contenido: nota.trim(),
+                    hcId: data.id,
+                    codigoHC: data.codigoVerificacion || "N/A",
+                  };
                   setData((p) => ({
                     ...p,
-                    estadoHistoria: "Abierta",
-                    conteoEdiciones: (p.conteoEdiciones || 0) + 1,
-                    motivoEdicion: reason,
-                    reaperturas: [
-                      ...(p.reaperturas || []),
-                      {
-                        fecha: new Date().toISOString(),
-                        autor: currentUser?.name,
-                        motivo: reason,
-                        codigoAnterior: data.codigoVerificacion,
-                      },
-                    ],
+                    notasAclaratorias: [...(p.notasAclaratorias || []), notaObj],
                   }));
-                  logAccess("ReaperturaAdmin", data.id, dataType);
-                  showAlert(
-                    "⚠️ HC reabierta. Este evento quedó registrado en el audit log."
-                  );
+                  setTimeout(() => {
+                    const updPats = patientsList.map((p) =>
+                      p.id === data.id
+                        ? { ...p, notasAclaratorias: [...(p.notasAclaratorias || []), notaObj] }
+                        : p
+                    );
+                    setPatientsList(updPats);
+                    const _suid = currentUser?.empresaId ? "empresa_" + currentUser.empresaId : currentUser?.user;
+                    _sync(_patKey(_suid), JSON.stringify(updPats));
+                  }, 0);
+                  logAccess("NotaAclaratoria", data.id, dataType);
+                  setTimeout(() => showAlert(`✅ Nota aclaratoria registrada.\nAutor: ${notaObj.autor}\nFecha: ${new Date(notaObj.fecha).toLocaleString("es-CO")}`), 100);
                 }
               );
-            });
-          });
-        } else {
-          showAlert("Opción no válida. Ingrese 1, 2 o 3.");
+            }, 150);
+          }
+        },
+        ...(isAdminUser ? [{
+          label: "🔓 Reapertura completa",
+          color: "bg-red-600 hover:bg-red-700",
+          action: () => {
+            setConfirmConfig(null);
+            setTimeout(() => {
+              showPrompt(
+                "🔐 Ingrese el código de administrador para reabrir la HC:",
+                (adminCode) => {
+                  if (!adminCode) return;
+                  _sha256(adminCode).then((h) => {
+                    const storedCode = _ls.getItem("siso_admin_code_hash") || _H.adminCode;
+                    if (h !== storedCode) {
+                      setTimeout(() => showAlert("⛔ Código incorrecto."), 100);
+                      return;
+                    }
+                    setTimeout(() => {
+                      showPrompt(
+                        "📋 Motivo de reapertura (mín. 20 caracteres — queda en auditoría):",
+                        (reason) => {
+                          if (!reason || reason.trim().length < 20) {
+                            setTimeout(() => showAlert("El motivo debe tener al menos 20 caracteres."), 100);
+                            return;
+                          }
+                          setData((p) => ({
+                            ...p,
+                            estadoHistoria: "Abierta",
+                            conteoEdiciones: (p.conteoEdiciones || 0) + 1,
+                            motivoEdicion: reason,
+                            reaperturas: [
+                              ...(p.reaperturas || []),
+                              {
+                                fecha: new Date().toISOString(),
+                                autor: currentUser?.name || currentUser?.user,
+                                motivo: reason,
+                                codigoAnterior: data.codigoVerificacion,
+                              },
+                            ],
+                          }));
+                          logAccess("ReaperturaAdmin", data.id, `Motivo: ${reason}`);
+                          setTimeout(() => showAlert("⚠️ HC reabierta para edición completa.\nEste evento quedó registrado en auditoría."), 100);
+                        }
+                      );
+                    }, 150);
+                  });
+                }
+              );
+            }, 150);
+          }
+        }] : []),
+        ...(isAdminUser ? [{
+          label: "✏️ Editar campos específicos",
+          color: "bg-blue-600 hover:bg-blue-700",
+          action: () => {
+            setConfirmConfig(null);
+            setTimeout(() => {
+              showPrompt(
+                "🔐 Código de administrador para editar campos:",
+                (adminCode) => {
+                  if (!adminCode) return;
+                  _sha256(adminCode).then((h) => {
+                    const storedCode = _ls.getItem("siso_admin_code_hash") || _H.adminCode;
+                    if (h !== storedCode) {
+                      setTimeout(() => showAlert("⛔ Código incorrecto."), 100);
+                      return;
+                    }
+                    // Mostrar selector de campo a editar
+                    setTimeout(() => {
+                      setConfirmConfig({
+                        msg: `✏️ Editar campo de HC cerrada\nPaciente: ${data.nombres}\n\nSeleccione el campo a modificar:`,
+                        buttons: [
+                          {
+                            label: "📋 Tipo de Evaluación (actual: " + (data.tipoExamen || "—") + ")",
+                            color: "bg-indigo-600 hover:bg-indigo-700",
+                            action: () => {
+                              setConfirmConfig(null);
+                              setTimeout(() => {
+                                showPrompt(
+                                  `Nuevo tipo de evaluación:\n(Actual: ${data.tipoExamen || "—"})\n\nOpciones: INGRESO, PERIÓDICO, EGRESO, POST-INCAPACIDAD, SEGUIMIENTO, RETIRO`,
+                                  (nuevoValor) => {
+                                    if (!nuevoValor || nuevoValor.trim().length < 3) return;
+                                    setTimeout(() => {
+                                      showPrompt(
+                                        "📝 Motivo del cambio (obligatorio — queda en auditoría):",
+                                        (motivo) => {
+                                          if (!motivo || motivo.trim().length < 10) {
+                                            setTimeout(() => showAlert("El motivo debe tener al menos 10 caracteres."), 100);
+                                            return;
+                                          }
+                                          const cambio = {
+                                            id: Date.now(),
+                                            fecha: new Date().toISOString(),
+                                            autor: currentUser?.name || currentUser?.user,
+                                            rol: currentUser?.role,
+                                            campo: "tipoExamen",
+                                            valorAnterior: data.tipoExamen || "",
+                                            valorNuevo: nuevoValor.trim().toUpperCase(),
+                                            motivo: motivo.trim(),
+                                            hcId: data.id,
+                                            codigoHC: data.codigoVerificacion || "N/A",
+                                          };
+                                          setData((p) => ({
+                                            ...p,
+                                            tipoExamen: nuevoValor.trim().toUpperCase(),
+                                            _cambiosPostCierre: [...(p._cambiosPostCierre || []), cambio],
+                                          }));
+                                          setTimeout(() => {
+                                            const updPats = patientsList.map((pt) =>
+                                              pt.id === data.id ? { ...pt, tipoExamen: nuevoValor.trim().toUpperCase(), _cambiosPostCierre: [...(pt._cambiosPostCierre || []), cambio] } : pt
+                                            );
+                                            setPatientsList(updPats);
+                                            const _suid = currentUser?.empresaId ? "empresa_" + currentUser.empresaId : currentUser?.user;
+                                            _sync(_patKey(_suid), JSON.stringify(updPats));
+                                          }, 0);
+                                          logAccess("EditCampoHCCerrada", data.id, `tipoExamen: ${data.tipoExamen} → ${nuevoValor.trim().toUpperCase()} | Motivo: ${motivo}`);
+                                          setTimeout(() => showAlert(`✅ Tipo de evaluación cambiado.\n\n${data.tipoExamen} → ${nuevoValor.trim().toUpperCase()}\nMotivo: ${motivo}\n\nRegistrado en auditoría.`), 100);
+                                        }
+                                      );
+                                    }, 150);
+                                  }
+                                );
+                              }, 150);
+                            }
+                          },
+                          {
+                            label: "🏢 Empresa (actual: " + (data.empresaNombre || "—") + ")",
+                            color: "bg-teal-600 hover:bg-teal-700",
+                            action: () => {
+                              setConfirmConfig(null);
+                              setTimeout(() => {
+                                showPrompt(
+                                  `Nueva empresa:\n(Actual: ${data.empresaNombre || "—"})`,
+                                  (nuevoValor) => {
+                                    if (!nuevoValor || nuevoValor.trim().length < 3) return;
+                                    setTimeout(() => {
+                                      showPrompt(
+                                        "📝 Motivo del cambio (obligatorio — queda en auditoría):",
+                                        (motivo) => {
+                                          if (!motivo || motivo.trim().length < 10) {
+                                            setTimeout(() => showAlert("El motivo debe tener al menos 10 caracteres."), 100);
+                                            return;
+                                          }
+                                          const cambio = {
+                                            id: Date.now(),
+                                            fecha: new Date().toISOString(),
+                                            autor: currentUser?.name || currentUser?.user,
+                                            rol: currentUser?.role,
+                                            campo: "empresaNombre",
+                                            valorAnterior: data.empresaNombre || "",
+                                            valorNuevo: nuevoValor.trim(),
+                                            motivo: motivo.trim(),
+                                            hcId: data.id,
+                                            codigoHC: data.codigoVerificacion || "N/A",
+                                          };
+                                          setData((p) => ({
+                                            ...p,
+                                            empresaNombre: nuevoValor.trim(),
+                                            _cambiosPostCierre: [...(p._cambiosPostCierre || []), cambio],
+                                          }));
+                                          setTimeout(() => {
+                                            const updPats = patientsList.map((pt) =>
+                                              pt.id === data.id ? { ...pt, empresaNombre: nuevoValor.trim(), _cambiosPostCierre: [...(pt._cambiosPostCierre || []), cambio] } : pt
+                                            );
+                                            setPatientsList(updPats);
+                                            const _suid = currentUser?.empresaId ? "empresa_" + currentUser.empresaId : currentUser?.user;
+                                            _sync(_patKey(_suid), JSON.stringify(updPats));
+                                          }, 0);
+                                          logAccess("EditCampoHCCerrada", data.id, `empresaNombre: ${data.empresaNombre} → ${nuevoValor.trim()} | Motivo: ${motivo}`);
+                                          setTimeout(() => showAlert(`✅ Empresa cambiada.\n\n${data.empresaNombre} → ${nuevoValor.trim()}\nMotivo: ${motivo}\n\nRegistrado en auditoría.`), 100);
+                                        }
+                                      );
+                                    }, 150);
+                                  }
+                                );
+                              }, 150);
+                            }
+                          },
+                          {
+                            label: "🔬 Énfasis (actual: " + (data.enfasisExamen || "—") + ")",
+                            color: "bg-purple-600 hover:bg-purple-700",
+                            action: () => {
+                              setConfirmConfig(null);
+                              setTimeout(() => {
+                                showPrompt(
+                                  `Nuevo énfasis:\n(Actual: ${data.enfasisExamen || "—"})\n\nOpciones: GENERAL, ALTURAS, ALIMENTOS, CONFINADOS, OSTEOMUSCULAR, CORAZON`,
+                                  (nuevoValor) => {
+                                    if (!nuevoValor || nuevoValor.trim().length < 3) return;
+                                    setTimeout(() => {
+                                      showPrompt(
+                                        "📝 Motivo del cambio (obligatorio — queda en auditoría):",
+                                        (motivo) => {
+                                          if (!motivo || motivo.trim().length < 10) {
+                                            setTimeout(() => showAlert("El motivo debe tener al menos 10 caracteres."), 100);
+                                            return;
+                                          }
+                                          const cambio = {
+                                            id: Date.now(),
+                                            fecha: new Date().toISOString(),
+                                            autor: currentUser?.name || currentUser?.user,
+                                            rol: currentUser?.role,
+                                            campo: "enfasisExamen",
+                                            valorAnterior: data.enfasisExamen || "",
+                                            valorNuevo: nuevoValor.trim().toUpperCase(),
+                                            motivo: motivo.trim(),
+                                            hcId: data.id,
+                                            codigoHC: data.codigoVerificacion || "N/A",
+                                          };
+                                          setData((p) => ({
+                                            ...p,
+                                            enfasisExamen: nuevoValor.trim().toUpperCase(),
+                                            _cambiosPostCierre: [...(p._cambiosPostCierre || []), cambio],
+                                          }));
+                                          setTimeout(() => {
+                                            const updPats = patientsList.map((pt) =>
+                                              pt.id === data.id ? { ...pt, enfasisExamen: nuevoValor.trim().toUpperCase(), _cambiosPostCierre: [...(pt._cambiosPostCierre || []), cambio] } : pt
+                                            );
+                                            setPatientsList(updPats);
+                                            const _suid = currentUser?.empresaId ? "empresa_" + currentUser.empresaId : currentUser?.user;
+                                            _sync(_patKey(_suid), JSON.stringify(updPats));
+                                          }, 0);
+                                          logAccess("EditCampoHCCerrada", data.id, `enfasisExamen: ${data.enfasisExamen} → ${nuevoValor.trim().toUpperCase()} | Motivo: ${motivo}`);
+                                          setTimeout(() => showAlert(`✅ Énfasis cambiado.\n\n${data.enfasisExamen} → ${nuevoValor.trim().toUpperCase()}\nMotivo: ${motivo}\n\nRegistrado en auditoría.`), 100);
+                                        }
+                                      );
+                                    }, 150);
+                                  }
+                                );
+                              }, 150);
+                            }
+                          },
+                          {
+                            label: "← Volver",
+                            color: "bg-gray-400 hover:bg-gray-500",
+                            action: () => { setConfirmConfig(null); setTimeout(() => handleEditHistory(), 100); }
+                          }
+                        ]
+                      });
+                    }, 150);
+                  });
+                }
+              );
+            }, 150);
+          }
+        }] : []),
+        {
+          label: "Cancelar",
+          color: "bg-gray-400 hover:bg-gray-500",
+          action: () => setConfirmConfig(null)
         }
-      }
-    );
+      ]
+    });
   };
   const handleCompanySelect = (e) => {
     const id = e.target.value;
@@ -15582,6 +16429,14 @@ Esta historia clínica debe conservarse mínimo 20 años.
     if (val.length >= 3) {
       const _ownPats = _isAdmin(currentUser?.role)
         ? patientsList
+        : currentUser?.role === "secretaria"
+        ? (() => {
+            const secU = usersList.find(u => u.user === currentUser.user);
+            const asig = secU?.medicosAsignados || [];
+            return asig.length > 0
+              ? patientsList.filter(p => !p._medicoId || asig.includes(p._medicoId))
+              : patientsList;
+          })()
         : patientsList.filter(
             (p) => !p._medicoId || p._medicoId === currentUser?.user
           );
@@ -15759,10 +16614,534 @@ Esta historia clínica debe conservarse mínimo 20 años.
     }
   };
   const handlePrint = (title) => {
+    const printStyle = document.createElement('style');
+    printStyle.textContent = `
+      @media print {
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        @page { size: letter portrait; margin: 0.8cm 1cm; }
+        body { font-size: 9pt !important; line-height: 1.3 !important; }
+        /* Ocultar elementos de navegación */
+        nav, .no-print, button:not(.print-keep), [class*="no-print"] { display: none !important; }
+        /* Tablas: colores exactos como en pantalla */
+        table { border-collapse: collapse !important; width: 100% !important; page-break-inside: auto !important; font-size: 8pt !important; }
+        thead { display: table-header-group !important; }
+        tr { page-break-inside: avoid !important; }
+        th { background-color: #1e293b !important; color: white !important; padding: 4px 6px !important; font-size: 8pt !important; border: 1px solid #374151 !important; }
+        td { border: 1px solid #d1d5db !important; padding: 3px 6px !important; font-size: 8pt !important; }
+        tr:nth-child(even) { background-color: #f8fafc !important; }
+        /* Gráficos y barras de estadísticas */
+        [class*="bg-emerald"], [class*="bg-green"] { background-color: #059669 !important; }
+        [class*="bg-blue"] { background-color: #2563eb !important; }
+        [class*="bg-red"] { background-color: #dc2626 !important; }
+        [class*="bg-amber"], [class*="bg-yellow"] { background-color: #d97706 !important; }
+        [class*="bg-purple"] { background-color: #7c3aed !important; }
+        [class*="bg-teal"] { background-color: #0d9488 !important; }
+        /* Texto de colores */
+        [class*="text-emerald"], [class*="text-green"] { color: #059669 !important; }
+        [class*="text-blue"] { color: #2563eb !important; }
+        [class*="text-red"] { color: #dc2626 !important; }
+        /* Bordes y shadows */
+        [class*="border"] { border-color: #d1d5db !important; }
+        [class*="shadow"] { box-shadow: none !important; }
+        [class*="rounded"] { border-radius: 4px !important; }
+        /* Badges y pills */
+        [class*="rounded-full"] { border-radius: 999px !important; }
+        /* Evitar cortes en secciones */
+        .print-section, [class*="rounded-xl"], [class*="rounded-2xl"] { page-break-inside: avoid !important; }
+        /* Matriz Legal: tabla completa sin cortar */
+        [class*="overflow-x-auto"] { overflow: visible !important; }
+        [class*="overflow-auto"] { overflow: visible !important; }
+        [class*="max-h-"] { max-height: none !important; }
+        [class*="max-w-"] { max-width: none !important; }
+        /* Scrollables: mostrar todo al imprimir */
+        [class*="overflow-y-auto"] { overflow: visible !important; height: auto !important; }
+        /* Ancho completo — todos los contenedores se expanden */
+        .max-w-5xl, .max-w-4xl, .max-w-3xl, .max-w-2xl, .max-w-xl, .max-w-lg, .max-w-md,
+        .container, [class*="max-w-"] { max-width: 100% !important; width: 100% !important; }
+        /* Padding lateral reducido para aprovechar el papel */
+        .px-4, .px-5, .px-6, .px-8 { padding-left: 0.3rem !important; padding-right: 0.3rem !important; }
+        .p-4, .p-5, .p-6, .p-8 { padding: 0.3rem !important; }
+        /* Grids: adaptarse al ancho del papel */
+        .grid { display: block !important; }
+        .grid > * { margin-bottom: 0.5rem !important; }
+        /* Flexbox: no envolver para tablas */
+        .flex-wrap { flex-wrap: nowrap !important; }
+        /* Charts/barras de progreso: mantener proporciones */
+        [class*="h-2"], [class*="h-3"], [class*="h-4"] { height: auto !important; min-height: 8px !important; }
+        /* Gap reducido */
+        .gap-4, .gap-6, .gap-8 { gap: 0.3rem !important; }
+        /* Asegurar que el contenido principal ocupa todo */
+        #root { width: 100% !important; }
+        main, [role="main"] { width: 100% !important; padding: 0 !important; margin: 0 !important; }
+      }
+    `;
+    document.head.appendChild(printStyle);
     const orig = document.title;
-    document.title = `[OCUPASALUD] ${title || "Documento"}`;
-    window.print();
-    document.title = orig;
+    document.title = "[OCUPASALUD] " + (title || "Documento");
+    setTimeout(() => {
+      window.print();
+      document.title = orig;
+      document.head.removeChild(printStyle);
+    }, 200);
+  };
+  // ══ FIX: Imprimir HC como documento HTML limpio (sin sobreposición) ══
+  const _printHCClean = () => {
+    const _e = (v) => String(v == null ? "" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const _nl = (v) => _e(v).replace(/\n/g, "<br/>");
+    const doc = activeDoctorData || {};
+    const sig = activeSignature || "";
+    const sigHtml = sig ? '<img src="' + sig + '" style="max-height:65px;display:block;margin:0 auto 4px;" alt="Firma"/>' : '<div style="height:60px;"></div>';
+    const _miIPS = currentUser?.empresaId ? companies.find(c => c.id === currentUser.empresaId) : null;
+    const ipsName = _miIPS?.nombre || doc.nombre || "OcupaSalud";
+    const fmtList = (txt) => {
+      const s = Array.isArray(txt) ? txt.join("\n") : String(txt || "");
+      if (!s.trim()) return "";
+      const lines = s.split("\n").map(l => l.trim()).filter(Boolean);
+      if (lines.some(l => /^[•*\-\d]/.test(l))) {
+        return '<ul style="margin:4px 0;padding-left:16px;">' + lines.map(l => '<li style="margin-bottom:2px;font-size:9pt;">' + _e(l).replace(/^[•*\-]+\s*/, "").replace(/^\d+\.\s*/, "") + '</li>').join("") + '</ul>';
+      }
+      return '<p style="font-size:9pt;white-space:pre-wrap;line-height:1.5;">' + _nl(s) + '</p>';
+    };
+    const sec = (icon, text) => '<div style="background:#ecfdf5;border-left:4px solid #065f46;padding:6px 12px;margin:14px 0 6px 0;font-weight:900;font-size:9.5pt;text-transform:uppercase;color:#065f46;">' + icon + " " + _e(text) + '</div>';
+    const r2 = (l1,v1,l2,v2) => '<tr><th style="background:#d1fae5;font-weight:700;width:20%;font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;">' + _e(l1) + '</th><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;width:30%;">' + _e(v1) + '</td><th style="background:#d1fae5;font-weight:700;width:20%;font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;">' + _e(l2) + '</th><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;width:30%;">' + _e(v2) + '</td></tr>';
+    const r1 = (l,v) => '<tr><th style="background:#d1fae5;font-weight:700;width:28%;font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;">' + _e(l) + '</th><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;" colspan="3">' + (typeof v === "string" && v.includes("<") ? v : _e(v)) + '</td></tr>';
+    const tb = (rows) => '<table style="width:100%;border-collapse:collapse;">' + rows + '</table>';
+    const pill = (txt, color) => '<span style="display:inline-block;background:' + color + ';color:white;padding:2px 8px;border-radius:10px;font-size:7.5pt;margin:2px;font-weight:700;">' + _e(txt) + '</span>';
+
+    const sections = [];
+
+    // ═══ 1. HEADER ═══
+    var hdrLeft = '<div><div style="font-size:12pt;font-weight:900;color:#065f46;">' + _e(ipsName) + '</div>';
+    hdrLeft += '<p style="font-size:8pt;color:#555;">' + _e(doc.titulo || "Médico Especialista SST") + '</p>';
+    hdrLeft += '<p style="font-size:8pt;color:#555;">Lic: ' + _e(doc.licencia || "--") + ' · ' + _e(doc.ciudad || "") + '</p>';
+    if (doc.celular) hdrLeft += '<p style="font-size:7.5pt;color:#888;">Tel: ' + _e(doc.celular) + (doc.email ? " · " + _e(doc.email) : "") + '</p>';
+    hdrLeft += '</div>';
+    var hdrRight = '<div style="text-align:right;"><div style="font-size:13pt;font-weight:900;color:#065f46;text-transform:uppercase;">HISTORIA CLÍNICA ' + _e(dataType === "ocupacional" ? "OCUPACIONAL" : "GENERAL") + '</div>';
+    hdrRight += '<p style="font-size:8.5pt;color:#555;">Fecha: ' + _e(data.fechaExamen || data.fechaConsulta || new Date().toLocaleDateString("es-CO")) + '</p>';
+    hdrRight += '<p style="font-size:8pt;color:#888;">Tipo: ' + _e(data.tipoExamen || "CONSULTA") + ' · ' + _e(data.enfasisExamen || "") + '</p>';
+    if (data.codigoVerificacion) hdrRight += '<p style="font-size:7.5pt;font-family:monospace;color:#065f46;font-weight:900;">Código: ' + _e(data.codigoVerificacion) + '</p>';
+    if (data.estado) hdrRight += '<p style="font-size:8pt;color:#555;">Estado: ' + _e(data.estado) + '</p>';
+    hdrRight += '</div>';
+    sections.push('<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #065f46;padding-bottom:10px;margin-bottom:12px;">' + hdrLeft + hdrRight + '</div>');
+
+    // ═══ 2. DATOS DEL PACIENTE ═══
+    sections.push(sec("👤", "Datos del Paciente") + tb(
+      r2("Nombres", data.nombres, "Documento", (data.docTipo||"CC")+" "+(data.docNumero||"")) +
+      r2("Fecha Nac.", data.fechaNacimiento, "Edad", (data.edad||"--")+" años") +
+      r2("Género", data.genero, "Estado Civil", data.estadoCivil) +
+      r2("Escolaridad", data.escolaridad, "Grupo Sanguíneo", data.grupoSanguineo) +
+      r2("Lateralidad", data.lateralidad, "Grupo Étnico", data.grupoEtnico) +
+      r2("Estrato", data.estrato, "Tipo Vivienda", data.tipoVivienda) +
+      r2("Zona Residencia", data.zonaResidencia, "Residencia", data.residencia) +
+      r2("Celular", data.celular||data.telefono, "Email", data.email) +
+      r2("EPS", data.eps, "AFP", data.afp) +
+      r1("Consentimiento Informado", data.consentimiento || "Firmado")
+    ));
+
+    // ═══ 3. DATOS LABORALES (solo ocupacional) ═══
+    if (dataType === "ocupacional") {
+      sections.push(sec("🏢", "Datos Laborales") + tb(
+        r2("Empresa", data.empresaNombre||data.empresa, "NIT", data.empresaNit||data.NIT||"") +
+        r2("Actividad Económica", data.actividadEconomica, "ARL", data.arl) +
+        r2("Nivel Riesgo ARL", data.nivelRiesgoARL, "Cargo", data.cargo) +
+        r2("Dependencia", data.dependencia, "Tipo Contrato", data.tipoContrato) +
+        r2("Turno Trabajo", data.turnoTrabajo, "Antigüedad Empresa", data.antiguedadEmpresa) +
+        r2("Tipo Examen", data.tipoExamen, "Énfasis", data.enfasisExamen)
+      ));
+    }
+
+    // ═══ 4. FACTORES DE RIESGO ═══
+    var riesgos = data.riesgos || {};
+    var riesgoCategories = ["fisicos","quimicos","biologicos","mecanicos","biomecanicos","psicosocial","seguridad","locativos"];
+    var riesgoLabels = {fisicos:"Físicos",quimicos:"Químicos",biologicos:"Biológicos",mecanicos:"Mecánicos",biomecanicos:"Biomecánicos",psicosocial:"Psicosocial",seguridad:"Seguridad",locativos:"Locativos"};
+    var riesgoPills = "";
+    riesgoCategories.forEach(function(cat) {
+      var val = riesgos[cat];
+      if (val) {
+        if (Array.isArray(val)) {
+          val.forEach(function(r) { riesgoPills += pill(riesgoLabels[cat] + ": " + r, "#0d9488"); });
+        } else if (typeof val === "object") {
+          Object.entries(val).forEach(function(entry) { if (entry[1]) riesgoPills += pill(riesgoLabels[cat] + ": " + entry[0], "#0d9488"); });
+        } else {
+          riesgoPills += pill(riesgoLabels[cat] + ": " + val, "#0d9488");
+        }
+      }
+    });
+    // Also handle any extra keys not in the standard list
+    Object.keys(riesgos).forEach(function(k) {
+      if (riesgoCategories.indexOf(k) === -1 && riesgos[k]) {
+        riesgoPills += pill(k + ": " + (typeof riesgos[k] === "object" ? JSON.stringify(riesgos[k]) : riesgos[k]), "#6b7280");
+      }
+    });
+    if (riesgoPills) sections.push(sec("⚠️", "Factores de Riesgo Ocupacional") + '<div style="padding:6px 10px;">' + riesgoPills + '</div>');
+
+    // ═══ 5. MOTIVO DE CONSULTA ═══
+    var motivoParts = [data.motivoConsulta, data.enfermedadActual].filter(Boolean);
+    if (motivoParts.length > 0) {
+      var motivoHtml = "";
+      if (data.motivoConsulta) motivoHtml += '<p style="font-size:9pt;"><strong>Motivo de consulta:</strong> ' + _nl(data.motivoConsulta) + '</p>';
+      if (data.enfermedadActual) motivoHtml += '<p style="font-size:9pt;"><strong>Enfermedad actual:</strong> ' + _nl(data.enfermedadActual) + '</p>';
+      sections.push(sec("🩺", "Motivo de Consulta / Enfermedad Actual") + '<div style="padding:6px 10px;">' + motivoHtml + '</div>');
+    }
+
+    // ═══ 6. HÁBITOS ═══
+    var hab = data.habitos || {};
+    sections.push(sec("🚬", "Hábitos") + tb(
+      r2("Tabaquismo", hab.fuma||"No", "Alcohol", hab.alcohol||"No") +
+      r2("Actividad Física", hab.deporte||"No", "Sustancias Psicoactivas", hab.psicoactivas||hab.drogas||"No") +
+      (hab.detalle ? r1("Detalle", hab.detalle) : "")
+    ));
+
+    // ═══ 7. ANTECEDENTES (FUENTE CORRECTA) ═══
+    var antAgrup = data.antecedentesAgrupados || {};
+    var antRows = "";
+    // Antecedentes Agrupados
+    var antCats = [
+      ["Patológicos", antAgrup.patologicos],
+      ["Quirúrgicos", antAgrup.quirurgicos],
+      ["Traumáticos", antAgrup.traumaticos],
+      ["Farmacológicos", antAgrup.farmacologicos],
+      ["Alérgicos", antAgrup.alergicos]
+    ];
+    antCats.forEach(function(pair) {
+      var label = pair[0];
+      var obj = pair[1] || {};
+      var det = obj.det || obj.val || "";
+      var hasData = det && det !== "Niega" && det !== "No";
+      antRows += '<tr><th style="background:#d1fae5;font-weight:700;width:28%;font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;">' + _e(label) + '</th>';
+      if (hasData) {
+        antRows += '<td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;color:#dc2626;font-weight:700;" colspan="3">Sí — ' + _e(det) + '</td></tr>';
+      } else {
+        antRows += '<td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;color:#065f46;" colspan="3">Niega</td></tr>';
+      }
+    });
+    // Antecedentes generales (texto libre)
+    var antGeneral = [
+      ["Personales", data.antecedentes?.personales || data.antecedentesPersonales],
+      ["Familiares", data.antecedentes?.familiares || data.antecedentesFamiliares],
+      ["Gineco-obstétricos", data.antecedentes?.ginecologicos || data.antecedentesGinecoObstetricos],
+      ["Ocupacionales", data.antecedentesOcupacionales],
+      ["Hospitalarios", data.antecedentesHospitalarios],
+      ["Toxicológicos", data.antecedentesToxicologicos]
+    ];
+    antGeneral.forEach(function(pair) {
+      if (pair[1]) antRows += r1(pair[0], pair[1]);
+    });
+    // Vacunas
+    var vacunas = data.vacunas || [];
+    if (vacunas.length > 0 || data.vacunacionCompleta) {
+      var vacHtml = (data.vacunacionCompleta ? '<strong>Esquema completo: </strong>' + _e(data.vacunacionCompleta) + '<br/>' : '');
+      vacHtml += vacunas.map(function(v) { return _e(typeof v === "string" ? v : (v.nombre || "") + (v.dosis ? " (" + v.dosis + ")" : "") + (v.fecha ? " - " + v.fecha : "")); }).join(", ");
+      antRows += r1("Vacunas", vacHtml);
+    }
+    sections.push(sec("📋", "Antecedentes") + tb(antRows || r1("Sin antecedentes", "No registra")));
+
+    // ═══ 8. SIGNOS VITALES ═══
+    sections.push(sec("🔍", "Signos Vitales") + tb(
+      r2("Tensión Arterial", data.ta||data.tensionArterial||"--", "F. Cardíaca", (data.fc||data.frecuenciaCardiaca||"--")+" lpm") +
+      r2("F. Respiratoria", (data.fr||data.frecuenciaRespiratoria||"--")+" rpm", "Temperatura", (data.temp||data.temperatura||"--")+"°C") +
+      r2("Peso", (data.peso||"--")+" kg", "Talla", (data.talla||"--")+" cm") +
+      r2("IMC", data.imc||"--", "Clasificación IMC", data.clasificacionIMC||"--") +
+      r2("SpO2", (data.satO2||"--")+"%", "Perímetro Abdominal", (data.perimetroAbdominal||"--")+" cm")
+    ));
+
+    // ═══ 9. AGUDEZA VISUAL ═══
+    var av = data.agudezaVisual || {};
+    if (av.lejanaOD || av.lejanaOI || av.proximaOD || av.proximaOI) {
+      sections.push(sec("👁️", "Agudeza Visual") + tb(
+        r2("Lejana OD", av.lejanaOD||"--", "Lejana OI", av.lejanaOI||"--") +
+        r2("Próxima OD", av.proximaOD||"--", "Próxima OI", av.proximaOI||"--") +
+        r1("Corrección", av.correccion||"Sin corrección")
+      ));
+    }
+
+    // ═══ 10. EXAMEN FÍSICO POR SISTEMAS — TODOS 15 SISTEMAS ═══
+    var efSis = data.examenFisicoSistemas || {};
+    var allSystems = ["cabeza","ojos","oidos","nariz","boca","cuello","torax","corazon","pulmones","abdomen","genitourinario","columna","extremidades","piel","neurologico"];
+    var sysLabels = {cabeza:"Cabeza",ojos:"Ojos",oidos:"Oídos",nariz:"Nariz",boca:"Boca/Faringe",cuello:"Cuello",torax:"Tórax",corazon:"Corazón",pulmones:"Pulmones",abdomen:"Abdomen",genitourinario:"Genitourinario",columna:"Columna",extremidades:"Extremidades",piel:"Piel/Faneras",neurologico:"Neurológico"};
+    var sysRows = allSystems.map(function(k) {
+      var v = efSis[k] || {};
+      var label = sysLabels[k] || k;
+      var estado = v.estado || "Normal";
+      var hallazgo = v.hallazgo || "";
+      var isAnormal = estado === "Anormal" || (hallazgo && hallazgo !== "Sin hallazgos patológicos");
+      var color = isAnormal ? "#dc2626" : "#065f46";
+      var bgColor = isAnormal ? "#fef2f2" : "#f0fdf4";
+      var descNormal = NORMAL_DESCRIPTIONS_SYSTEMS[k] || "Sin hallazgos patológicos";
+      var descFinal = isAnormal ? (hallazgo || "Hallazgo registrado") : (hallazgo || descNormal);
+      return '<tr style="background:' + bgColor + '"><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;width:25%;font-weight:700;">' + _e(label) + '</td><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;width:15%;color:' + color + ';font-weight:700;">' + _e(estado) + '</td><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;color:' + color + ';">' + _e(descFinal) + '</td></tr>';
+    }).join("");
+    // Also any extra systems not in the standard list
+    Object.keys(efSis).forEach(function(k) {
+      if (allSystems.indexOf(k) === -1) {
+        var v = efSis[k] || {};
+        var estado = v.estado || "Normal";
+        var hallazgo = v.hallazgo || "";
+        var isAnormal = estado === "Anormal";
+        var color = isAnormal ? "#dc2626" : "#065f46";
+        sysRows += '<tr><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;width:25%;font-weight:700;">' + _e(k) + '</td><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;width:15%;color:' + color + ';font-weight:700;">' + _e(estado) + '</td><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;">' + _e(hallazgo) + '</td></tr>';
+      }
+    });
+    sections.push(sec("🏥", "Examen Físico por Sistemas") + '<table style="width:100%;border-collapse:collapse;margin-top:4px;"><thead><tr><th style="background:#065f46;color:white;padding:4px 8px;font-size:8pt;text-align:left;">Sistema</th><th style="background:#065f46;color:white;padding:4px 8px;font-size:8pt;">Estado</th><th style="background:#065f46;color:white;padding:4px 8px;font-size:8pt;text-align:left;">Hallazgo</th></tr></thead><tbody>' + sysRows + '</tbody></table>');
+
+    // ═══ 11. MANIOBRAS ORTOPÉDICAS — Solo si énfasis OSTEOMUSCULAR ═══
+    var _enfasis = (data.enfasisExamen || "").toUpperCase();
+    var _mostrarManiobras = _enfasis === "OSTEOMUSCULAR" || _enfasis.includes("OSTEO");
+    var manio = data.maniobrasOsteomusculares || {};
+    var allManiobras = ["phalen","tinel","finkelstein","jobe","lasegue","adams","wells","schober"];
+    var manioLabels = {phalen:"Phalen",tinel:"Tinel",finkelstein:"Finkelstein",jobe:"Jobe",lasegue:"Lasègue",adams:"Adams",wells:"Wells",schober:"Schober"};
+    var manioRows = allManiobras.map(function(k) {
+      var v = manio[k] || {};
+      var label = manioLabels[k] || k;
+      var estado = v.estado || v || "";
+      if (typeof estado === "object") estado = estado.estado || "No evaluado";
+      var hallazgo = (typeof v === "object" ? v.hallazgo : "") || "";
+      var isPositive = estado === "Positivo" || estado === "Anormal" || estado === "Positiva";
+      var color = isPositive ? "#dc2626" : "#065f46";
+      var bgColor = isPositive ? "#fef2f2" : "#f0fdf4";
+      return '<tr style="background:' + bgColor + '"><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;width:25%;font-weight:700;">' + _e(label) + '</td><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;width:20%;color:' + color + ';font-weight:700;">' + _e(estado || "Negativo") + '</td><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;">' + _e(hallazgo) + '</td></tr>';
+    }).join("");
+    // Also any extra maniobras
+    Object.keys(manio).forEach(function(k) {
+      if (allManiobras.indexOf(k) === -1) {
+        var v = manio[k] || {};
+        var estado = (typeof v === "object" ? v.estado : v) || "";
+        var hallazgo = (typeof v === "object" ? v.hallazgo : "") || "";
+        var isPositive = estado === "Positivo" || estado === "Anormal";
+        var color = isPositive ? "#dc2626" : "#065f46";
+        manioRows += '<tr><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;width:25%;font-weight:700;">' + _e(k) + '</td><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;width:20%;color:' + color + ';font-weight:700;">' + _e(estado) + '</td><td style="font-size:8.5pt;padding:4px 8px;border:1px solid #ccc;">' + _e(hallazgo) + '</td></tr>';
+      }
+    });
+    if (_mostrarManiobras) {
+      sections.push(sec("🦴", "Maniobras Ortopédicas — Énfasis Osteomuscular") + '<table style="width:100%;border-collapse:collapse;margin-top:4px;"><thead><tr><th style="background:#065f46;color:white;padding:4px 8px;font-size:8pt;text-align:left;">Maniobra</th><th style="background:#065f46;color:white;padding:4px 8px;font-size:8pt;">Resultado</th><th style="background:#065f46;color:white;padding:4px 8px;font-size:8pt;text-align:left;">Hallazgo</th></tr></thead><tbody>' + manioRows + '</tbody></table>');
+    }
+
+    // ═══ 12. ÉNFASIS ESPECIALES — Solo se imprime el énfasis que tiene la HC ═══
+    var _enfasisHC = (data.enfasisExamen || "").toUpperCase();
+    // ALTURAS — solo si el énfasis es ALTURAS
+    var alt = data.examenAlturas || {};
+    if (_enfasisHC === "ALTURAS" && (alt.romberg || alt.marcha || alt.vertigo || alt.coordinacion || alt.nistagmus || alt.testMiedo || alt.observaciones)) {
+      sections.push(sec("🧗", "Énfasis: Trabajo en Alturas") + tb(
+        r2("Romberg", alt.romberg||"--", "Marcha", alt.marcha||"--") +
+        r2("Vértigo", alt.vertigo||"No", "Coordinación", alt.coordinacion||"--") +
+        r2("Nistagmus", alt.nistagmus||"No", "Test de Miedo", alt.testMiedo||"--") +
+        (alt.observaciones ? r1("Observaciones", alt.observaciones) : "")
+      ));
+    }
+    // ALIMENTOS — solo si el énfasis es ALIMENTOS
+    var alim = data.examenAlimentos || {};
+    if (_enfasisHC === "ALIMENTOS" && (alim.pielFaneras || alim.orl || alim.gastrointestinal || alim.observaciones)) {
+      sections.push(sec("🍽️", "Énfasis: Manipulación de Alimentos") + tb(
+        r2("Piel y Faneras", alim.pielFaneras||"--", "ORL", alim.orl||"--") +
+        r1("Gastrointestinal", alim.gastrointestinal||"--") +
+        (alim.observaciones ? r1("Observaciones", alim.observaciones) : "")
+      ));
+    }
+    // CONFINADOS — solo si el énfasis es CONFINADOS
+    var conf = data.examenConfinados || {};
+    if (_enfasisHC === "CONFINADOS" && (conf.cardiovascular || conf.respiratorio || conf.neurologico || conf.psicologico || conf.otorrino || conf.usoEpp || conf.observaciones)) {
+      sections.push(sec("🔒", "Énfasis: Espacios Confinados") + tb(
+        r2("Cardiovascular", conf.cardiovascular||"--", "Respiratorio", conf.respiratorio||"--") +
+        r2("Neurológico", conf.neurologico||"--", "Psicológico", conf.psicologico||"--") +
+        r2("Otorrino", conf.otorrino||"--", "Uso EPP", conf.usoEpp||"--") +
+        (conf.hallazgosCardio ? r1("Hallazgos Cardio", conf.hallazgosCardio) : "") +
+        (conf.observaciones ? r1("Observaciones", conf.observaciones) : "")
+      ));
+    }
+    // OSTEOMUSCULAR — solo si el énfasis es OSTEOMUSCULAR
+    var osteo = data.examenOsteomuscular || {};
+    if (_enfasisHC === "OSTEOMUSCULAR" && (osteo.columna || osteo.miembrosSup || osteo.miembrosInf || osteo.muscular || osteo.articular || osteo.postural || osteo.hallazgos || osteo.diagnosticoFuncional)) {
+      sections.push(sec("💪", "Énfasis: Osteomuscular") + tb(
+        r2("Columna", osteo.columna||"--", "Miembros Superiores", osteo.miembrosSup||"--") +
+        r2("Miembros Inferiores", osteo.miembrosInf||"--", "Muscular", osteo.muscular||"--") +
+        r2("Articular", osteo.articular||"--", "Postural", osteo.postural||"--") +
+        (osteo.hallazgos ? r1("Hallazgos", osteo.hallazgos) : "") +
+        (osteo.diagnosticoFuncional ? r1("Diagnóstico Funcional", osteo.diagnosticoFuncional) : "")
+      ));
+    }
+    // CORAZÓN — solo si el énfasis es CORAZON
+    var cora = data.examenCorazon || {};
+    if (_enfasisHC === "CORAZON" && (cora.frecuenciaCardiaca || cora.presionArterial || cora.ritmoyTonos || cora.pulsos || cora.edemas || cora.perfusionPeriferica || cora.riesgoCV || cora.hallazgos || cora.restricciones)) {
+      sections.push(sec("❤️", "Énfasis: Cardiovascular") + tb(
+        r2("F. Cardíaca", cora.frecuenciaCardiaca||"--", "Presión Arterial", cora.presionArterial||"--") +
+        r2("Ritmo y Tonos", cora.ritmoyTonos||"--", "Pulsos", cora.pulsos||"--") +
+        r2("Edemas", cora.edemas||"No", "Perfusión Periférica", cora.perfusionPeriferica||"--") +
+        r2("IMC", cora.imc||data.imc||"--", "Riesgo CV", cora.riesgoCV||"--") +
+        (cora.hallazgos ? r1("Hallazgos", cora.hallazgos) : "") +
+        (cora.restricciones ? r1("Restricciones", cora.restricciones) : "")
+      ));
+    }
+
+    // ═══ 13. PARACLÍNICOS ═══
+    var paraCheck = data.paraclinicosCheck || {};
+    var paraKeys = Object.keys(paraCheck).filter(function(k) { return k !== "_aiSugeridos" && paraCheck[k]; });
+    var examList = data.solicitudExamenes || [];
+    if (paraKeys.length > 0 || examList.length > 0) {
+      var paraHtml = '';
+      if (paraKeys.length > 0) {
+        paraHtml += '<div style="padding:6px 10px;margin-bottom:6px;">' + paraKeys.map(function(k) { return pill(k, "#0d9488"); }).join("") + '</div>';
+      }
+      if (examList.length > 0) {
+        paraHtml += '<table style="width:100%;border-collapse:collapse;"><thead><tr><th style="background:#0d9488;color:white;padding:4px 8px;font-size:8pt;text-align:left;">N°</th><th style="background:#0d9488;color:white;padding:4px 8px;font-size:8pt;text-align:left;">Examen / Procedimiento</th><th style="background:#0d9488;color:white;padding:4px 8px;font-size:8pt;text-align:center;">Urgente</th></tr></thead><tbody>';
+        examList.forEach(function(ex, i) {
+          paraHtml += '<tr style="background:' + (i % 2 === 0 ? "#f0fdfa" : "white") + '"><td style="padding:4px 8px;font-size:8.5pt;border:1px solid #ccc;">' + (i+1) + '</td><td style="padding:4px 8px;font-size:8.5pt;border:1px solid #ccc;">' + _e(ex.nombre) + '</td><td style="padding:4px 8px;font-size:8.5pt;border:1px solid #ccc;text-align:center;">' + (ex.urgente ? "⚡ SÍ" : "") + '</td></tr>';
+        });
+        paraHtml += '</tbody></table>';
+      }
+      sections.push(sec("🔬", "Paraclínicos y Exámenes Solicitados") + paraHtml);
+    }
+
+    // ═══ 14. DIAGNÓSTICOS CIE-10 ═══
+    var dxList = data.diagnosticos?.length ? data.diagnosticos : [];
+    sections.push(sec("🏥", "Diagnósticos CIE-10") + tb(
+      r2("Dx Principal", data.diagnosticoPrincipal||"Z10.0", "Dx Secundario 1", data.diagnosticoSecundario1||"") +
+      (data.diagnosticoSecundario2 ? r1("Dx Secundario 2", data.diagnosticoSecundario2) : "") +
+      dxList.map(function(d,i) { return r1("Dx " + (i+1) + " (" + _e(d.tipo||"—") + ")", (d.cie10||"") + " " + (d.descripcion||"")); }).join("")
+    ));
+
+    // ═══ 15. CONCEPTO DE APTITUD ═══
+    var aptitud = data.conceptoAptitud || "PENDIENTE";
+    var aptColor = "#065f46"; // default green
+    var aptLower = String(aptitud).toLowerCase();
+    if (aptLower.indexOf("no apto") !== -1 || aptLower.indexOf("no cumple") !== -1) aptColor = "#dc2626";
+    else if (aptLower.indexOf("restriccion") !== -1 || aptLower.indexOf("condicion") !== -1 || aptLower.indexOf("aplazado") !== -1) aptColor = "#d97706";
+    sections.push(sec("✅", "Concepto de Aptitud") +
+      '<div style="background:' + aptColor + ';color:white;text-align:center;padding:10px;border-radius:6px;font-size:12pt;font-weight:900;margin:8px 0;text-transform:uppercase;">' + _e(aptitud) + '</div>' +
+      (data.vigencia ? '<p style="text-align:center;font-size:8.5pt;color:#555;margin-bottom:8px;">Vigencia: ' + _e(data.vigencia) + '</p>' : ""));
+
+    // ═══ 16. RECOMENDACIONES ═══
+    var recomParts = [data.recomendaciones, data.recomendacionesOcupacionales, data.recomendacionesMedicas].filter(Boolean);
+    var recomChecklist = data.recomendacionesChecklist || [];
+    if (recomParts.length > 0 || recomChecklist.length > 0) {
+      var recomHtml = '<div style="margin:8px 0;"><strong style="font-size:9.5pt;color:#065f46;">RECOMENDACIONES:</strong>';
+      recomParts.forEach(function(txt) { recomHtml += fmtList(txt); });
+      if (recomChecklist.length > 0) {
+        recomHtml += '<ul style="margin:4px 0;padding-left:16px;">';
+        recomChecklist.forEach(function(item) {
+          var txt = typeof item === "string" ? item : (item.texto || item.label || item.nombre || JSON.stringify(item));
+          recomHtml += '<li style="margin-bottom:2px;font-size:9pt;">' + _e(txt) + '</li>';
+        });
+        recomHtml += '</ul>';
+      }
+      recomHtml += '</div>';
+      sections.push(recomHtml);
+    }
+
+    // ═══ 17. RESTRICCIONES ═══
+    var restricTxt = Array.isArray(data.analisisRestricciones) ? data.analisisRestricciones.join("\n") : (data.analisisRestricciones || data.restricciones || "");
+    var restricChecklist = data.restriccionesChecklist || [];
+    if (restricTxt || restricChecklist.length > 0) {
+      var restricHtml = '<div style="margin:8px 0;"><strong style="font-size:9.5pt;color:#dc2626;">RESTRICCIONES LABORALES:</strong>';
+      if (restricTxt) restricHtml += fmtList(restricTxt);
+      if (restricChecklist.length > 0) {
+        restricHtml += '<ul style="margin:4px 0;padding-left:16px;">';
+        restricChecklist.forEach(function(item) {
+          var txt = typeof item === "string" ? item : (item.texto || item.label || "");
+          var normativa = typeof item === "object" ? (item.normativa || "") : "";
+          restricHtml += '<li style="margin-bottom:2px;font-size:9pt;">' + _e(txt) + (normativa ? ' <em style="color:#6b7280;font-size:8pt;">(' + _e(normativa) + ')</em>' : '') + '</li>';
+        });
+        restricHtml += '</ul>';
+      }
+      restricHtml += '</div>';
+      sections.push(restricHtml);
+    }
+
+    // ═══ 18. ANÁLISIS CLÍNICO IA ═══
+    if (data.analisisIA) sections.push(sec("🧠", "Análisis Clínico IA") + '<div style="padding:6px 10px;font-size:9pt;white-space:pre-wrap;line-height:1.5;background:#fefce8;border:1px solid #fde68a;border-radius:4px;margin:4px 0;">' + _nl(data.analisisIA) + '</div>');
+
+    // ═══ 19. SVE ═══
+    if (data.sveRecomendado?.length > 0) {
+      sections.push(sec("🛡️", "Sistema de Vigilancia Epidemiológica (SVE)") + '<ul style="padding-left:16px;margin:4px 0;">' + data.sveRecomendado.map(function(s) { return '<li style="font-size:9pt;margin-bottom:3px;">' + _e(typeof s === "string" ? s : (s.nombre || JSON.stringify(s))) + '</li>'; }).join("") + '</ul>');
+    }
+
+    // ═══ 20. DERIVACIONES ═══
+    var derivs = data.derivaciones || [];
+    if (derivs.length > 0) {
+      var derivRows = derivs.map(function(d, i) {
+        return '<tr style="background:' + (i % 2 === 0 ? "#eff6ff" : "white") + '"><td style="padding:4px 8px;border:1px solid #ccc;font-size:8.5pt;font-weight:700;">' + _e(d.especialidad) + '</td><td style="padding:4px 8px;border:1px solid #ccc;font-size:8.5pt;">' + _e(d.motivo) + '</td><td style="padding:4px 8px;border:1px solid #ccc;font-size:8.5pt;">' + _e(d.urgencia) + '</td></tr>';
+      }).join("");
+      sections.push(sec("🔗", "Derivaciones / Interconsultas") + '<table style="width:100%;border-collapse:collapse;"><thead><tr><th style="background:#2563eb;color:white;padding:4px 8px;font-size:8pt;">Especialidad</th><th style="background:#2563eb;color:white;padding:4px 8px;font-size:8pt;">Motivo</th><th style="background:#2563eb;color:white;padding:4px 8px;font-size:8pt;">Urgencia</th></tr></thead><tbody>' + derivRows + '</tbody></table>');
+    }
+
+    // ═══ 21. FÓRMULA MÉDICA ═══
+    var meds = data.formulaMedicamentos || [];
+    var formulaTxt = data.formulaMedica || "";
+    if (meds.length > 0 || formulaTxt) {
+      var medHtml = "";
+      if (meds.length > 0) {
+        medHtml += '<table style="width:100%;border-collapse:collapse;"><thead><tr><th style="background:#7c3aed;color:white;padding:4px 8px;font-size:8pt;">Medicamento</th><th style="background:#7c3aed;color:white;padding:4px 8px;font-size:8pt;">Presentación</th><th style="background:#7c3aed;color:white;padding:4px 8px;font-size:8pt;">Dosis</th><th style="background:#7c3aed;color:white;padding:4px 8px;font-size:8pt;">Frecuencia</th><th style="background:#7c3aed;color:white;padding:4px 8px;font-size:8pt;">Duración</th></tr></thead><tbody>';
+        meds.forEach(function(m, i) {
+          medHtml += '<tr style="background:' + (i % 2 === 0 ? "#faf5ff" : "white") + '"><td style="padding:4px 8px;border:1px solid #ccc;font-size:8.5pt;font-weight:700;">' + _e(m.nombre) + '</td><td style="padding:4px 8px;border:1px solid #ccc;font-size:8.5pt;">' + _e(m.presentacion) + '</td><td style="padding:4px 8px;border:1px solid #ccc;font-size:8.5pt;">' + _e(m.dosis) + '</td><td style="padding:4px 8px;border:1px solid #ccc;font-size:8.5pt;">' + _e(m.frecuencia) + '</td><td style="padding:4px 8px;border:1px solid #ccc;font-size:8.5pt;">' + _e(m.duracion) + '</td></tr>';
+        });
+        medHtml += '</tbody></table>';
+      }
+      if (formulaTxt) medHtml += '<div style="padding:6px 10px;margin-top:6px;">' + fmtList(formulaTxt) + '</div>';
+      sections.push(sec("💊", "Fórmula Médica") + medHtml);
+    }
+
+    // ═══ 22. INCAPACIDAD ═══
+    var inc = data.incapacidad || {};
+    if (inc.aplica || inc.dias > 0) {
+      sections.push(sec("📋", "Incapacidad Médica") + tb(
+        r2("Días", inc.dias||0, "Origen", inc.origen||"Enfermedad General") +
+        r2("Desde", inc.desde||"--", "Hasta", inc.hasta||"--") +
+        r1("Diagnóstico CIE", inc.diagnosticoCIE||inc.diagnostico||"--")
+      ));
+    }
+
+    // ═══ 23. ADJUNTOS ═══
+    var adjuntos = data.adjuntos || [];
+    if (adjuntos.length > 0) {
+      sections.push(sec("📎", "Adjuntos") + '<ul style="padding-left:16px;margin:4px 0;">' + adjuntos.map(function(a) {
+        var nombre = typeof a === "string" ? a : (a.nombre || a.name || a.url || "Archivo adjunto");
+        return '<li style="font-size:9pt;margin-bottom:3px;">' + _e(nombre) + '</li>';
+      }).join("") + '</ul>');
+    }
+
+    // ═══ 24. NOTAS ACLARATORIAS ═══
+    var notas = data.notasAclaratorias || [];
+    if (notas.length > 0) {
+      var notasHtml = notas.map(function(n) {
+        var fecha = n.fecha ? new Date(n.fecha).toLocaleString("es-CO") : "";
+        return '<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:4px;padding:8px;margin:4px 0;font-size:8.5pt;"><strong>' + _e(fecha) + ' — ' + _e(n.autor||"") + '</strong><br/>' + _nl(n.contenido||"") + '</div>';
+      }).join("");
+      sections.push(sec("📌", "Notas Aclaratorias") + notasHtml);
+    }
+
+    // ═══ 25. EVOLUCIONES ═══
+    var evols = data.evoluciones || [];
+    if (evols.length > 0) {
+      var evolsHtml = evols.map(function(ev) {
+        var h = '<div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:4px;padding:8px;margin:4px 0;font-size:8.5pt;">';
+        h += '<strong>' + _e(ev.fecha||"") + ' — ' + _e(ev.medico||"") + ' · Código: ' + _e(ev.codigoEvolucion||"") + '</strong><br/>';
+        if (ev.motivoConsulta) h += _e(ev.motivoConsulta);
+        if (ev.texto) h += '<br/>' + _nl(ev.texto);
+        if (ev.nuevoConcept) h += '<br/><strong>Concepto:</strong> ' + _e(ev.nuevoConcept);
+        h += '</div>';
+        return h;
+      }).join("");
+      sections.push(sec("📜", "Evoluciones Clínicas") + evolsHtml);
+    }
+
+    // ═══ 26. FIRMA ═══
+    sections.push('<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:30px;padding-top:10px;border-top:2px solid #d1d5db;">' +
+      '<div style="text-align:center;width:40%;"><div style="height:50px;"></div><div style="border-top:1.5px solid #333;padding-top:4px;font-size:8pt;font-weight:700;">Firma del Trabajador<br/>' + _e(data.docTipo||"CC") + ': ' + _e(data.docNumero||"") + '</div></div>' +
+      '<div style="text-align:center;width:40%;">' + sigHtml + '<div style="border-top:1.5px solid #333;padding-top:4px;font-size:8pt;font-weight:700;">' + _e(doc.nombre||"") + '<br/>' + _e(doc.titulo||"") + '<br/>C.C. ' + _e(doc.cedula||"") + '<br/>RM: ' + _e(doc.licencia||"") + '<br/>' + _e(doc.ciudad||"") + '</div></div></div>');
+
+    // ═══ CÓDIGO VERIFICACIÓN ═══
+    if (data.codigoVerificacion) {
+      sections.push('<div style="text-align:center;margin-top:12px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:6px;padding:8px;"><p style="font-size:7.5pt;font-weight:900;color:#6b7280;text-transform:uppercase;">Historia Clínica Firmada y Cerrada</p><p style="font-size:11pt;font-family:monospace;font-weight:900;color:#065f46;letter-spacing:2px;">' + _e(data.codigoVerificacion) + '</p></div>');
+    }
+
+    // ═══ ENSAMBLAR DOCUMENTO ═══
+    var w = window.open("", "_blank", "width=870,height=1100");
+    if (!w) { showAlert("Permita las ventanas emergentes para imprimir."); return; }
+    w.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>[OCUPASALUD] ' + _e(data.nombres||"HC") + '</title>' +
+    '<style>@page{size:letter portrait;margin:1.1cm 1.4cm 1.3cm 1.4cm;}*{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}body{font-family:"Segoe UI",Arial,Helvetica,sans-serif;font-size:9.5pt;color:#111;margin:0;padding:14mm 16mm;line-height:1.45;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #b7e3c9;padding:5px 8px;font-size:8.5pt;}th{font-weight:700;text-align:left;background-color:#d1fae5!important;color:#065f46;}p{margin:3px 0;}ul{margin:4px 0;padding-left:16px;}li{margin-bottom:2px;font-size:9pt;}.sec-hdr{background-color:#065f46!important;color:#fff!important;padding:6px 12px;margin:14px 0 6px;font-weight:900;font-size:9.5pt;text-transform:uppercase;border-radius:4px;}.np-bar{position:fixed;top:0;left:0;right:0;background:#065f46;color:#fff;padding:8px 14px;display:flex;align-items:center;gap:10px;z-index:9999;}.np-bar button{border:none;padding:6px 16px;border-radius:6px;font-weight:900;cursor:pointer;font-size:9pt;background:#10b981;color:#fff;}tr:nth-child(even){background-color:#f0fdf4!important;}@media print{.np-bar{display:none!important;}body{padding:0;}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}table{page-break-inside:auto;}tr{page-break-inside:avoid;}th{background-color:#d1fae5!important;}}</style></head><body>' +
+    '<div class="np-bar"><span style="flex:1;font-weight:700;">\uD83D\uDCCB HC ' + _e(data.nombres||"") + ' \u2014 ' + _e(data.codigoVerificacion||"") + '</span><button onclick="window.print()">\uD83D\uDCE5 Guardar / Imprimir PDF</button><button onclick="window.close()" style="background:#ef4444;">\u2715 Cerrar</button></div>' +
+    '<div style="margin-top:50px;">' + sections.join("") + '</div></body></html>');
+    w.document.close();
+    w.focus();
   };
   // ── Navegación con historial -- permite ← Volver sin volver al login ──────
   // Helper: mostrar diálogo guardar-antes-de-salir si la HC tiene cambios pendientes
@@ -15774,6 +17153,10 @@ Esta historia clínica debe conservarse mínimo 20 años.
     }
   };
   const _goToDirect = (newView) => {
+    // Autoguardado antes de navegar
+    if (view === "historia" && data.nombres) {
+      _ls.setItem("siso_active_form", JSON.stringify({ ...data, _autoSaved: new Date().toISOString() }));
+    }
     // Al entrar al dashboard, asegurar que todos los datos del _ls estén cargados
     if (newView === "dashboard") {
       // AISLAMIENTO: usar clave específica del usuario activo (o empresa compartida)
@@ -15970,7 +17353,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
               )}
               {data.estadoHistoria === "Cerrada" ? (
                 <div className="flex items-center gap-1">
-                  {/* Botón principal: Evolución */}
+                  {/* Botón único: Evolución (incluye nota clínica, fórmula, exámenes, incapacidad, nuevo certificado) */}
                   <button
                     onClick={() => {
                       setEvolucionForm({
@@ -15988,6 +17371,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
                         planConducta: "",
                         recomendaciones: "",
                         formulaMedicamentos: [],
+                        examenesSolicitados: [],
                         derivaciones: [],
                         incapacidad: {
                           aplica: false,
@@ -15997,31 +17381,23 @@ Esta historia clínica debe conservarse mínimo 20 años.
                           desde: "",
                           hasta: "",
                         },
+                        _examSearch: "",
                       });
                       setShowEvolucionModal(true);
                     }}
-                    className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-purple-700 flex items-center gap-1"
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-purple-700 flex items-center gap-1.5 shadow"
                   >
-                    <ClipboardList className="w-3 h-3" /> Evolución
+                    <ClipboardList className="w-3.5 h-3.5" /> Evolución / Nuevo Certificado
                   </button>
-                                <button
-                onClick={() => {
-                  setEvolucionForm((p) => ({ ...p, activeEvTab: "concepto", nuevoConcept: p.nuevoConcept || "", recomendaciones: p.recomendaciones || "" }));
-                  setShowEvolucionModal(true);
-                }}
-                className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 shadow hover:bg-emerald-700"
-              >
-                📄 Nuevo Certificado
-              </button>
-                  {/* Mini-botón admin: Nota Aclaratoria / Reapertura */}
+                  {/* Mini-botón admin: Nota Aclaratoria / Reapertura / Editar */}
                   {(_isAdmin(currentUser?.role) ||
                     currentUser?.role === "admin_empresa") && (
                     <button
                       onClick={handleEditHistory}
-                      className="bg-yellow-500 text-white px-2 py-1.5 rounded-lg text-xs font-bold hover:bg-yellow-600 flex items-center gap-1"
-                      title="Admin: Nota Aclaratoria / Reapertura"
+                      className="bg-yellow-500 text-white px-2 py-2 rounded-lg text-xs font-bold hover:bg-yellow-600 flex items-center gap-1"
+                      title="Admin: Nota Aclaratoria / Reapertura / Editar"
                     >
-                      <Unlock className="w-3 h-3" />
+                      <Unlock className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
@@ -16112,7 +17488,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
               )}
               <div className="w-px h-6 bg-gray-200" />
               <button
-                onClick={() => handlePrint(data.nombres)}
+                onClick={() => (view === "historia" && (dataType === "ocupacional" || dataType === "general")) ? _printHCClean() : handlePrint(data.nombres)}
                 className="bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1"
               >
                 <Printer className="w-3 h-3" /> PDF
@@ -20135,6 +21511,89 @@ Esta historia clínica debe conservarse mínimo 20 años.
               rows={4}
             />
           </div>
+          {/* ── ANÁLISIS CLÍNICO IA (campo independiente - Punto 10) ── */}
+          {data.analisisIA && (
+            <div className="mt-3">
+              <label className="block text-[10px] font-black text-indigo-700 uppercase mb-1">
+                🧠 Análisis Clínico <span className="ai-label-print-hide">(generado por IA — campo independiente)</span>
+              </label>
+              <textarea
+                value={data.analisisIA || ""}
+                onChange={(e) => setData(p => ({ ...p, analisisIA: e.target.value }))}
+                rows={6}
+                className="w-full p-3 border-2 border-indigo-200 rounded-xl text-xs bg-indigo-50/50 focus:border-indigo-400 focus:outline-none"
+                placeholder="El análisis clínico se genera automáticamente al usar la IA. Puede editarlo manualmente."
+                style={{ resize: "vertical" }}
+              />
+              <p className="text-[9px] text-indigo-400 mt-1">
+                Este campo es independiente de Recomendaciones y Restricciones. Redactado con lenguaje técnico-formal de medicina laboral.
+              </p>
+            </div>
+          )}
+          {!data.analisisIA && (
+            <div className="mt-3">
+              <label className="block text-[10px] font-black text-gray-500 uppercase mb-1">
+                🧠 Análisis Clínico
+              </label>
+              <textarea
+                value={data.analisisIA || ""}
+                onChange={(e) => setData(p => ({ ...p, analisisIA: e.target.value }))}
+                rows={3}
+                className="w-full p-2 border border-gray-200 rounded-xl text-xs focus:border-indigo-400 focus:outline-none"
+                placeholder="Se generará automáticamente con el análisis de IA, o puede escribirlo manualmente."
+                style={{ resize: "vertical" }}
+              />
+            </div>
+          )}
+          {/* ── SVE - Sistema de Vigilancia Epidemiológica (Punto 9) ── */}
+          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3">
+            <label className="block text-[10px] font-black text-amber-800 uppercase mb-2">
+              🛡️ Sistema de Vigilancia Epidemiológica (SVE) <span className="ai-label-print-hide">— Sugerido por IA</span>
+            </label>
+            {(data.sveRecomendado || []).length > 0 ? (
+              <div className="space-y-1.5">
+                {(data.sveRecomendado || []).map((sve, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-white border border-amber-100 rounded-lg px-3 py-2">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                    <span className="flex-1 text-xs font-semibold text-gray-800">{sve}</span>
+                    <button onClick={() => setData(p => ({ ...p, sveRecomendado: (p.sveRecomendado || []).filter((_, i) => i !== idx) }))} className="text-red-400 hover:text-red-600"><X className="w-3 h-3" /></button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-amber-600 italic">Sin SVE sugerido. Se generará al ejecutar el análisis con IA.</p>
+            )}
+            <div className="flex gap-2 mt-2">
+              <select
+                id="sve-manual-select"
+                className="flex-1 p-1.5 border border-amber-300 rounded-lg text-xs bg-white"
+                defaultValue=""
+              >
+                <option value="" disabled>Agregar SVE manualmente...</option>
+                <option>SVE Osteomuscular (Res. 2844/2007 — GATISO DME)</option>
+                <option>SVE Dermatológico</option>
+                <option>SVE Neurológico (riesgo por ruido — hipoacusia)</option>
+                <option>SVE Psicosocial (Res. 2764/2022 — Batería riesgo psicosocial)</option>
+                <option>SVE Visual</option>
+                <option>SVE Respiratorio</option>
+                <option>SVE Cardiovascular</option>
+                <option>SVE Biológico</option>
+                <option>SVE Químico</option>
+              </select>
+              <button
+                onClick={() => {
+                  const sel = document.getElementById("sve-manual-select");
+                  if (sel && sel.value) {
+                    setData(p => ({ ...p, sveRecomendado: [...(p.sveRecomendado || []), sel.value] }));
+                    sel.value = "";
+                  }
+                }}
+                className="bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-amber-700"
+              >
+                + Agregar
+              </button>
+            </div>
+          </div>
           <InputGroup
             label="Vigencia del Concepto ★"
             name="vigencia"
@@ -21756,7 +23215,6 @@ Esta historia clínica debe conservarse mínimo 20 años.
       </div>
       {/* ── NORMATIVO: Res. 1843/2025 Art. 25 - Registro entrega certificado ── */}
       {/* Evoluciones clínicas: se gestionan desde la HC, no aparecen en el certificado */}
-      {renderEvolucionModal()}
       {/* ══ B-F1-05: Carné manipulación alimentos ══ */}
       {data.enfasisExamen === "ALIMENTOS" && (
         <div className="no-print my-3 bg-green-50 border border-green-300 rounded-xl p-3 flex items-center justify-between">
@@ -21901,13 +23359,21 @@ Esta historia clínica debe conservarse mínimo 20 años.
     if (currentUser?.empresaId && !selectedCompanyReport) {
       setTimeout(() => setSelectedCompanyReport(currentUser.empresaId), 0);
     }
+    const _secMedVisibles = (() => {
+      if (currentUser?.role !== "secretaria") return null;
+      const secU = usersList.find(u => u.user === currentUser.user);
+      const asig = secU?.medicosAsignados || [];
+      return asig.length > 0 ? asig : null;
+    })();
     const filtered = _reportEmpId
       ? patientsList.filter(
           (p) =>
             p.empresaId === _reportEmpId &&
             p.fechaExamen &&
             (reportStartDate ? p.fechaExamen >= reportStartDate : true) &&
-            (reportEndDate ? p.fechaExamen <= reportEndDate : true)
+            (reportEndDate ? p.fechaExamen <= reportEndDate : true) &&
+            (selectedMedicoReport ? p._medicoId === selectedMedicoReport : true) &&
+            (_secMedVisibles ? _secMedVisibles.includes(p._medicoId) || !p._medicoId : true)
         )
       : [];
     const total = filtered.length;
@@ -22093,9 +23559,62 @@ Esta historia clínica debe conservarse mínimo 20 años.
                   </option>
                 ))}
               </select>
+              {(currentUser?.role === "secretaria" || _isAdmin(currentUser?.role)) && (
+                <select
+                  className="border-2 border-indigo-200 rounded-lg p-1.5 text-sm bg-indigo-50 text-indigo-800 font-bold"
+                  value={selectedMedicoReport}
+                  onChange={(e) => { setSelectedMedicoReport(e.target.value); setReportAIResult(null); }}
+                >
+                  <option value="">👨‍⚕️ Todos los médicos</option>
+                  {(() => {
+                    if (currentUser?.role === "secretaria") {
+                      const secUser = usersList.find(u => u.user === currentUser.user);
+                      const asig = secUser?.medicosAsignados || [];
+                      const lista = asig.length > 0
+                        ? usersList.filter(u => asig.includes(u.user))
+                        : usersList.filter(u => ["medico","administrador","super_admin"].includes(u.role) && u.activo !== false);
+                      return lista.map(m => <option key={m.user} value={m.user}>Dr. {m.name||m.user}</option>);
+                    }
+                    return usersList.filter(u => ["medico","administrador","super_admin"].includes(u.role) && u.activo !== false)
+                      .map(m => <option key={m.user} value={m.user}>{m.name||m.user}</option>);
+                  })()}
+                </select>
+              )}
             </div>
             <button
-              onClick={() => handlePrint(`Reporte-${compName}`)}
+              onClick={() => {
+                // Capturar el contenido del reporte y abrirlo en ventana nueva para impresión limpia
+                const reportContent = document.querySelector('[data-report-content]');
+                if (!reportContent) { handlePrint("Reporte-" + compName); return; }
+                const html = reportContent.innerHTML;
+                const w = window.open("", "_blank", "width=1000,height=800");
+                if (!w) { showAlert("Permita ventanas emergentes para imprimir."); return; }
+                w.document.write('<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>'
+                  + '<title>[OCUPASALUD] Reporte - ' + (compName || "Empresa") + '</title>'
+                  + '<script src="https://cdn.tailwindcss.com"><\/script>'
+                  + '<style>'
+                  + '* { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }'
+                  + 'body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10pt; color: #111; margin: 0; padding: 10mm 12mm; }'
+                  + 'table { width: 100%; border-collapse: collapse; margin: 6px 0; page-break-inside: auto; }'
+                  + 'thead { display: table-header-group; }'
+                  + 'tr { page-break-inside: avoid; }'
+                  + 'th { font-size: 8.5pt; font-weight: 700; padding: 5px 8px; border: 1px solid #d1d5db; }'
+                  + 'td { font-size: 8.5pt; padding: 4px 8px; border: 1px solid #d1d5db; }'
+                  + '.no-print, nav, button { display: none !important; }'
+                  + '.print-bar { position: fixed; top: 0; left: 0; right: 0; background: #1e293b; color: #fff; padding: 8px 16px; display: flex !important; align-items: center; gap: 10px; z-index: 9999; }'
+                  + '.print-bar button { display: inline-flex !important; border: none; padding: 6px 16px; border-radius: 6px; font-weight: 900; cursor: pointer; font-size: 9pt; background: #10b981; color: #fff; }'
+                  + '.print-bar .btn-close { background: #ef4444; }'
+                  + '@media print { .print-bar { display: none !important; } body { padding: 5mm 8mm; } }'
+                  + '@page { size: letter landscape; margin: 0.8cm 1cm; }'
+                  + '</style></head><body>'
+                  + '<div class="print-bar"><span style="flex:1;font-weight:700;">📊 Reporte — ' + (compName || "") + '</span>'
+                  + '<button onclick="window.print()">📥 Imprimir / PDF</button>'
+                  + '<button class="btn-close" onclick="window.close()">✕ Cerrar</button></div>'
+                  + '<div style="margin-top:50px;">' + html + '</div>'
+                  + '</body></html>');
+                w.document.close();
+                w.focus();
+              }}
               className="bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
             >
               <Printer className="w-4 h-4" /> Imprimir
@@ -22128,7 +23647,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
           )}
 
           {reporteActiveTab === "estadisticas" && (
-            <>
+            <div data-report-content>
               <div className="text-center mb-6">
                 <div className="flex justify-center mb-2">
                   <BrandLogo data={activeDoctorData} />
@@ -22446,7 +23965,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
                 </div>
                 <table>
                   <thead><tr>
-                    <th>#</th><th>Nombre / Trabajador</th><th>Documento</th><th>Sexo</th><th>Edad</th>
+                    <th>#</th><th>Nombre / Trabajador</th><th>Documento</th><th>Edad</th>
                     <th>Cargo</th><th>Empresa</th><th>EPS</th><th>ARL</th><th>Tipo Examen</th><th>Énfasis</th><th>Fecha</th>
                   </tr></thead>
                   <tbody>${filtered
@@ -22455,13 +23974,6 @@ Esta historia clínica debe conservarse mínimo 20 años.
                     <td>${String(i + 1).padStart(3, "0")}</td>
                     <td><b>${p.nombres || "--"}</b></td>
                     <td>${p.docTipo || "CC"} ${p.docNumero || "--"}</td>
-                    <td style="text-align:center">${
-                      p.genero === "Masculino"
-                        ? "M"
-                        : p.genero === "Femenino"
-                        ? "F"
-                        : p.genero || "--"
-                    }</td>
                     <td style="text-align:center">${p.edad || "--"}</td>
                     <td>${p.cargo || "--"}</td>
                     <td>${p.empresaNombre || "--"}</td>
@@ -22519,7 +24031,6 @@ Esta historia clínica debe conservarse mínimo 20 años.
                                 "ID",
                                 "Nombre / Trabajador",
                                 "Documento",
-                                "Sexo",
                                 "Edad",
                                 "Cargo",
                                 "Empresa",
@@ -22945,8 +24456,8 @@ Esta historia clínica debe conservarse mínimo 20 años.
                   <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4">
                     <div className="flex justify-between items-center mb-3">
                       <h3 className="font-black text-indigo-900 flex items-center gap-2">
-                        <BrainCircuit className="w-4 h-4" /> Análisis
-                        Inteligente IA
+                        <BrainCircuit className="w-4 h-4 no-print" /> Análisis
+                        <span className="ai-label-print-hide">Inteligente IA</span>
                       </h3>
                       <button
                         onClick={() => generateAIReport(stats, total, compName)}
@@ -22971,27 +24482,54 @@ Esta historia clínica debe conservarse mínimo 20 años.
                         <div className="text-xs text-justify text-gray-700 leading-relaxed whitespace-pre-wrap mb-3">
                           {reportAIResult.conclusiones}
                         </div>
+                        {/* ── Análisis Justificado (Punto 11) ── */}
+                        {reportAIResult.analisisJustificado && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-3">
+                            <p className="font-black text-amber-900 text-xs uppercase mb-2 flex items-center gap-1">
+                              <FileSearch className="w-3.5 h-3.5" /> Análisis Justificado — Interpretación Epidemiológica
+                            </p>
+                            <div className="text-xs text-justify text-amber-900 leading-relaxed whitespace-pre-wrap">
+                              {reportAIResult.analisisJustificado}
+                            </div>
+                          </div>
+                        )}
+                        {/* ── Recomendaciones del Informe (Punto 11) ── */}
+                        {reportAIResult.recomendacionesInforme && (
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-3">
+                            <p className="font-black text-emerald-900 text-xs uppercase mb-2 flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Recomendaciones — Acciones Correctivas y PVE
+                            </p>
+                            <div className="text-xs text-justify text-emerald-900 leading-relaxed whitespace-pre-wrap">
+                              {reportAIResult.recomendacionesInforme}
+                            </div>
+                          </div>
+                        )}
                         {reportAIResult.tabla?.length > 0 && (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                              <thead className="bg-white border-b">
-                                <tr>
-                                  <th className="py-2 text-left">
-                                    Diagnóstico
+                          <div className="overflow-x-auto mb-4">
+                            <p className="font-black text-gray-700 text-xs uppercase mb-2">📊 Morbilidad Prevalente</p>
+                            <table className="w-full text-xs border border-gray-300">
+                              <thead>
+                                <tr className="bg-slate-800 text-white">
+                                  <th className="py-2.5 px-3 text-left font-bold">
+                                    Diagnóstico (CIE-10)
                                   </th>
-                                  <th className="py-2 text-center">Casos</th>
-                                  <th className="py-2 text-right">%</th>
+                                  <th className="py-2.5 px-3 text-center font-bold w-20">Casos</th>
+                                  <th className="py-2.5 px-3 text-center font-bold w-20">%</th>
+                                  <th className="py-2.5 px-3 text-left font-bold w-32">Relación</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {reportAIResult.tabla.map((r, i) => (
-                                  <tr key={i} className="border-b">
-                                    <td className="py-1.5">{r.diagnostico}</td>
-                                    <td className="py-1.5 text-center">
+                                  <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                                    <td className="py-2 px-3 border-b border-gray-200 font-semibold">{r.diagnostico}</td>
+                                    <td className="py-2 px-3 border-b border-gray-200 text-center font-bold">
                                       {r.cantidad}
                                     </td>
-                                    <td className="py-1.5 text-right font-bold text-indigo-700">
+                                    <td className="py-2 px-3 border-b border-gray-200 text-center font-bold text-indigo-700">
                                       {r.porcentaje}
+                                    </td>
+                                    <td className="py-2 px-3 border-b border-gray-200 text-gray-600">
+                                      {r.relacion || "—"}
                                     </td>
                                   </tr>
                                 ))}
@@ -23007,14 +24545,30 @@ Esta historia clínica debe conservarse mínimo 20 años.
                       </p>
                     )}
                     {reportAIResult?.matrizLegalNormativa && (
-                      <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
-                        <p className="font-bold mb-1 flex items-center gap-1">
+                      <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 text-xs text-blue-900">
+                        <p className="font-black mb-2 flex items-center gap-1 uppercase text-blue-800">
                           <ShieldCheck className="w-3.5 h-3.5" /> Cumplimiento
                           Normativo
                         </p>
                         <p className="text-justify leading-relaxed">
                           {reportAIResult.matrizLegalNormativa}
                         </p>
+                      </div>
+                    )}
+                    {/* PVE Recomendados */}
+                    {reportAIResult?.pveRecomendados?.length > 0 && (
+                      <div className="mt-4 bg-teal-50 border border-teal-200 rounded-lg p-4 text-xs">
+                        <p className="font-black text-teal-900 uppercase mb-2 flex items-center gap-1">
+                          <Shield className="w-3.5 h-3.5" /> Programas de Vigilancia Epidemiológica Recomendados
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {reportAIResult.pveRecomendados.map((pve, i) => (
+                            <div key={i} className="flex items-center gap-2 bg-white border border-teal-100 rounded-lg px-3 py-2">
+                              <span className="text-teal-600 font-bold">✓</span>
+                              <span className="text-teal-900 font-semibold">{pve}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -23041,13 +24595,9 @@ Esta historia clínica debe conservarse mínimo 20 años.
                             <th className="p-2 text-left font-bold">
                               ID / Trabajador
                             </th>
-                            <th className="p-2 font-bold">Sexo</th>
                             <th className="p-2 font-bold">Edad</th>
                             <th className="p-2 font-bold text-left">
                               Riesgos Ocupacionales
-                            </th>
-                            <th className="p-2 font-bold text-left">
-                              Sintomatología / Motivo
                             </th>
                             <th className="p-2 font-bold text-left">
                               Diagnóstico (CIE-10)
@@ -23056,7 +24606,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
                               className="p-2 font-bold text-left"
                               style={{ minWidth: "220px" }}
                             >
-                              Recomendaciones y Restricciones
+                              Restricciones Laborales
                             </th>
                           </tr>
                         </thead>
@@ -23088,13 +24638,6 @@ Esta historia clínica debe conservarse mínimo 20 años.
                                     {p.nombres?.length > 28 ? "..." : ""}
                                   </p>
                                 </td>
-                                <td className="p-2 text-center font-bold">
-                                  {p.genero === "Masculino"
-                                    ? "M"
-                                    : p.genero === "Femenino"
-                                    ? "F"
-                                    : p.genero || "--"}
-                                </td>
                                 <td className="p-2 text-center">
                                   {p.edad || "--"}
                                 </td>
@@ -23110,40 +24653,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
                                     )}
                                   </p>
                                 </td>
-                                <td
-                                  className="p-2"
-                                  style={{ maxWidth: "110px" }}
-                                >
-                                  <p>
-                                    {p.motivoConsulta ||
-                                      p.tipoExamen ||
-                                      "Examen de rutina"}
-                                  </p>
-                                  {p.ta && (
-                                    <p className="text-[10px] mt-0.5">
-                                      TA: {p.ta}{" "}
-                                      {bpInfo && (
-                                        <span
-                                          className={`px-1 rounded ${bpInfo.color}`}
-                                        >
-                                          {bpInfo.text}
-                                        </span>
-                                      )}
-                                    </p>
-                                  )}
-                                  {p.imc && (
-                                    <p className="text-[10px]">
-                                      IMC: {p.imc}{" "}
-                                      {bmiInfo && (
-                                        <span
-                                          className={`px-1 rounded ${bmiInfo.color}`}
-                                        >
-                                          {bmiInfo.text}
-                                        </span>
-                                      )}
-                                    </p>
-                                  )}
-                                </td>
+                                {/* Sintomatología eliminada — dato confidencial */}
                                 <td
                                   className="p-2"
                                   style={{ maxWidth: "140px" }}
@@ -23161,32 +24671,20 @@ Esta historia clínica debe conservarse mínimo 20 años.
                                   className="p-2"
                                   style={{ minWidth: "220px" }}
                                 >
-                                  {p.recomendaciones && (
-                                    <div className="mb-2">
-                                      <p className="text-[9px] font-black text-emerald-700 uppercase mb-0.5">
-                                        ✓ Recomendaciones:
-                                      </p>
-                                      <p className="text-gray-700 leading-relaxed text-[10px] whitespace-pre-wrap">
-                                        {p.recomendaciones}
-                                      </p>
-                                    </div>
-                                  )}
-                                  {p.analisisRestricciones && (
+                                  {p.analisisRestricciones ? (
                                     <div>
                                       <p className="text-[9px] font-black text-red-700 uppercase mb-0.5">
                                         ⚠ Restricciones:
                                       </p>
                                       <p className="text-red-800 leading-relaxed text-[10px] whitespace-pre-wrap">
-                                        {p.analisisRestricciones}
+                                        {Array.isArray(p.analisisRestricciones) ? p.analisisRestricciones.join("\n") : p.analisisRestricciones}
                                       </p>
                                     </div>
+                                  ) : (
+                                    <span className="text-gray-400 italic text-[10px]">
+                                      Sin restricciones
+                                    </span>
                                   )}
-                                  {!p.recomendaciones &&
-                                    !p.analisisRestricciones && (
-                                      <span className="text-gray-400 italic text-[10px]">
-                                        Sin restricciones registradas
-                                      </span>
-                                    )}
                                 </td>
                               </tr>
                             );
@@ -23194,7 +24692,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
                           {filtered.length === 0 && (
                             <tr>
                               <td
-                                colSpan="7"
+                                colSpan="5"
                                 className="p-8 text-center text-gray-400 italic"
                               >
                                 No hay registros para esta empresa en el período
@@ -23275,7 +24773,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
                   <p>Seleccione una empresa para ver su informe.</p>
                 </div>
               )}
-            </>
+            </div>
           )}
           {/* ══ TAB: CERTIFICADOS POR EMPRESA ══ */}
           {reporteActiveTab === "certificados" &&
@@ -23917,6 +25415,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
   const renderCompanies = () => {
     if (
       currentUser?.role === "secretaria" &&
+      !_secretariaMedicoAsignado(currentUser, currentUser?.user, usersList) &&
       !_secretariaPuede("empresas", currentUser, usersList)
     )
       return (
@@ -23957,6 +25456,18 @@ Esta historia clínica debe conservarse mínimo 20 años.
         ["medico", "administrador", "super_admin"].includes(u.role) &&
         u.activo !== false
     );
+    // Secretaria: filtra empresas por médicos asignados
+    const _visibleCompanies = (() => {
+      if (currentUser?.role !== "secretaria") return companies;
+      const secU = usersList.find(u => u.user === currentUser.user);
+      const asig = secU?.medicosAsignados || [];
+      if (asig.length === 0) return companies;
+      return companies.filter(c =>
+        !c.medicoResponsableId ||
+        asig.includes(c.medicoResponsableId) ||
+        (c.medicoIds || []).some(mid => asig.includes(mid))
+      );
+    })();
     // companiesTab, editingCompany are component-level state (avoid React #310)
     return (
       <div className="min-h-screen bg-gray-50 font-sans">
@@ -23965,7 +25476,7 @@ Esta historia clínica debe conservarse mínimo 20 años.
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-black text-purple-900 flex items-center gap-2">
               <Building2 className="w-5 h-5" /> Empresas / Convenios (
-              {companies.length})
+              {_visibleCompanies.length})
             </h2>
             <button
               onClick={() => goBack()}
@@ -28673,10 +30184,11 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
         teleForm.hora
       );
       const nuevaTele = {
-        id: `tele_${Date.now()}`,
+        id: "tele_" + Date.now(),
         roomName,
         paciente: teleForm.paciente,
         documento: teleForm.documento,
+        celular: teleForm.celular,
         fecha: teleForm.fecha,
         hora: teleForm.hora,
         motivo: teleForm.motivo,
@@ -28684,14 +30196,19 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
         consentimientoTele: true,
         consentimientoTs: new Date().toISOString(),
         medico: currentUser?.name || currentUser?.user,
-        estado: "activa",
+        estado: "esperando",
+        horaInicio: null,
+        horaFin: null,
       };
       const lista = [nuevaTele, ...teleconsultas];
       _syncTele(lista);
+      // Agregar a sala de espera
+      setTeleEspera(function (prev) { return prev.concat([{ id: nuevaTele.id, paciente: nuevaTele.paciente, documento: nuevaTele.documento, hora: nuevaTele.hora, roomName: roomName }]); });
       setTeleSalaActiva({
         roomName,
         paciente: teleForm.paciente,
         documento: teleForm.documento,
+        celular: teleForm.celular,
         fecha: teleForm.fecha,
         hora: teleForm.hora,
       });
@@ -28699,14 +30216,58 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
 
     const handleCerrarSala = () => {
       if (teleSalaActiva) {
-        const lista = teleconsultas.map((t) =>
-          t.roomName === teleSalaActiva.roomName
-            ? { ...t, estado: "completada", finTs: new Date().toISOString() }
-            : t
-        );
+        var horaFinTele = new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: false }).replace(".", ":");
+        const lista = teleconsultas.map(function (t) {
+          if (t.roomName === teleSalaActiva.roomName) {
+            return Object.assign({}, t, { estado: "completada", finTs: new Date().toISOString(), horaFin: horaFinTele });
+          }
+          return t;
+        });
         _syncTele(lista);
+        // Remover de sala de espera
+        setTeleEspera(function (prev) { return prev.filter(function (e) { return e.roomName !== teleSalaActiva.roomName; }); });
       }
       setTeleSalaActiva(null);
+    };
+    // Iniciar consulta (cambiar de esperando a en_consulta)
+    const handleIniciarConsulta = (teleId) => {
+      var horaInicioTele = new Date().toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", hour12: false }).replace(".", ":");
+      const lista = teleconsultas.map(function (t) {
+        if (t.id === teleId) {
+          return Object.assign({}, t, { estado: "activa", horaInicio: horaInicioTele });
+        }
+        return t;
+      });
+      _syncTele(lista);
+      var found = teleconsultas.find(function (t) { return t.id === teleId; });
+      if (found) {
+        setTeleSalaActiva({
+          roomName: found.roomName,
+          paciente: found.paciente,
+          documento: found.documento,
+          celular: found.celular || "",
+          fecha: found.fecha,
+          hora: found.hora,
+        });
+      }
+      // Remover de espera visual
+      setTeleEspera(function (prev) { return prev.filter(function (e) { return e.id !== teleId; }); });
+    };
+    // Crear HC desde teleconsulta finalizada
+    const crearHCDesdeTele = (tele) => {
+      var newId = "pac_" + Date.now();
+      setData(Object.assign({}, initialGeneralPatientState, {
+        id: newId,
+        _medicoId: currentUser?.user,
+        nombres: tele.paciente,
+        docNumero: tele.documento,
+        celular: tele.celular || "",
+        motivoConsulta: "Teleconsulta \u2014 " + (tele.motivo || "Sin motivo registrado"),
+        _teleId: tele.id,
+      }));
+      setDataType("general");
+      setActiveTab("formGeneral");
+      setView("historia");
     };
 
     const jitsiUrl = teleSalaActiva
@@ -28740,7 +30301,12 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
+                {teleconsultas.filter(function (t) { return t.estado === "esperando"; }).length > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-full animate-pulse">
+                    {"🔴 " + teleconsultas.filter(function (t) { return t.estado === "esperando"; }).length + " en espera"}
+                  </span>
+                )}
                 <button
                   onClick={() => setTeleTab("nueva")}
                   className={`px-3 py-1.5 text-xs font-bold rounded-lg ${
@@ -28749,7 +30315,7 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
                       : "bg-blue-800 text-blue-200 hover:bg-blue-600"
                   }`}
                 >
-                  ➕ Nueva consulta
+                  {"➕ Nueva consulta"}
                 </button>
                 <button
                   onClick={() => setTeleTab("historial")}
@@ -28769,16 +30335,22 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
           {teleSalaActiva && (
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden border-2 border-blue-500">
               <div className="bg-blue-600 px-4 py-2 flex items-center justify-between">
-                <div className="text-white text-xs font-bold">
-                  🔴 CONSULTA EN CURSO - {teleSalaActiva.paciente} ·{" "}
-                  {teleSalaActiva.fecha} {teleSalaActiva.hora}
+                <div className="text-white text-xs font-bold flex items-center gap-2">
+                  {"🔴 CONSULTA EN CURSO - " + teleSalaActiva.paciente + " · " + teleSalaActiva.fecha + " " + teleSalaActiva.hora}
+                  {teleEspera.length > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse">
+                      {"🔴 " + teleEspera.length + " paciente" + (teleEspera.length !== 1 ? "s" : "") + " esperando"}
+                    </span>
+                  )}
                 </div>
-                <button
-                  onClick={handleCerrarSala}
-                  className="bg-red-500 hover:bg-red-600 text-white text-xs font-black px-3 py-1 rounded-lg"
-                >
-                  ⏹ Finalizar consulta
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCerrarSala}
+                    className="bg-red-500 hover:bg-red-600 text-white text-xs font-black px-3 py-1 rounded-lg"
+                  >
+                    ⏹ Finalizar consulta
+                  </button>
+                </div>
               </div>
               <div className="bg-gray-50 flex flex-col items-center justify-center gap-5 py-12">
                 <div className="text-center">
@@ -28810,8 +30382,23 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
                   >
                     📋 Copiar enlace para el paciente
                   </button>
+                  {teleSalaActiva.celular && (
+                    <a
+                      href={"https://wa.me/" + (teleSalaActiva.celular || "").replace(/\D/g, "") + "?text=" + encodeURIComponent("Hola " + teleSalaActiva.paciente + ", su teleconsulta esta lista. Ingrese al siguiente enlace: " + jitsiUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition"
+                    >
+                      {"📱 Enviar enlace por WhatsApp"}
+                    </a>
+                  )}
+                  {!teleSalaActiva.celular && (
+                    <p className="text-[10px] text-amber-600 text-center font-bold">
+                      {"⚠️ Sin celular registrado - No se puede enviar por WhatsApp"}
+                    </p>
+                  )}
                   <p className="text-[10px] text-gray-400 text-center">
-                    Enlace único: {jitsiUrl}
+                    {"Enlace \u00FAnico: " + jitsiUrl}
                   </p>
                 </div>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-[10px] text-blue-700 max-w-sm">
@@ -28867,6 +30454,19 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
                     }
                     className="w-full p-2 border rounded-lg text-sm"
                     placeholder="CC / CE / PP"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold text-gray-600 mb-1 uppercase">
+                    {"📱 Celular del paciente (WhatsApp)"}
+                  </label>
+                  <input
+                    value={teleForm.celular}
+                    onChange={(e) =>
+                      setTeleForm((p) => ({ ...p, celular: e.target.value }))
+                    }
+                    className="w-full p-2 border rounded-lg text-sm"
+                    placeholder="Ej: +573001234567"
                   />
                 </div>
                 <div>
@@ -28973,6 +30573,39 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
             </div>
           )}
 
+          {/* Sala de espera telemedicina */}
+          {teleEspera.length > 0 && !teleSalaActiva && (
+            <div className="bg-white rounded-2xl shadow-sm border-2 border-amber-300 overflow-hidden">
+              <div className="bg-amber-50 px-4 py-3 border-b border-amber-200">
+                <p className="text-sm font-black text-amber-800">
+                  {"🔴 Sala de Espera (" + teleEspera.length + " paciente" + (teleEspera.length !== 1 ? "s" : "") + ")"}
+                </p>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {teleconsultas.filter(function (t) { return t.estado === "esperando"; }).map(function (t) {
+                  return (
+                    <div key={t.id} className="flex items-center justify-between p-4 hover:bg-amber-50">
+                      <div>
+                        <p className="text-xs font-bold text-gray-800">
+                          {t.paciente + " · " + t.documento}
+                        </p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">
+                          {"📅 " + t.fecha + " " + t.hora + " · " + (t.motivo || "Sin motivo")}
+                        </p>
+                      </div>
+                      <button
+                        onClick={function () { handleIniciarConsulta(t.id); }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-black px-4 py-2 rounded-xl"
+                      >
+                        {"▶ Iniciar consulta"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Historial de teleconsultas */}
           {teleTab === "historial" && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -28983,46 +30616,79 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
               </div>
               {teleconsultas.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
-                  <p className="text-3xl mb-2">📹</p>
+                  <p className="text-3xl mb-2">{"📹"}</p>
                   <p className="text-sm font-bold">
                     Sin teleconsultas registradas
                   </p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
-                  {teleconsultas.map((t) => (
-                    <div
-                      key={t.id}
-                      className="flex items-center justify-between p-4 hover:bg-gray-50"
-                    >
-                      <div>
-                        <p className="text-xs font-bold text-gray-800">
-                          {t.paciente}{" "}
-                          <span className="font-normal text-gray-400">
-                            · {t.documento}
+                  {teleconsultas.map(function (t) {
+                    var estadoLabel = t.estado === "activa" ? "🔵 En curso" : t.estado === "esperando" ? "🟡 Programada" : "✅ Finalizada";
+                    var estadoClass = t.estado === "activa" ? "bg-blue-100 text-blue-700" : t.estado === "esperando" ? "bg-yellow-100 text-yellow-700" : "bg-emerald-100 text-emerald-700";
+                    var duracionStr = "";
+                    if (t.horaInicio && t.horaFin) {
+                      var partsI = t.horaInicio.split(":");
+                      var partsF = t.horaFin.split(":");
+                      if (partsI.length === 2 && partsF.length === 2) {
+                        var minI = parseInt(partsI[0], 10) * 60 + parseInt(partsI[1], 10);
+                        var minF = parseInt(partsF[0], 10) * 60 + parseInt(partsF[1], 10);
+                        var diff = minF - minI;
+                        if (diff > 0) duracionStr = diff + " min";
+                      }
+                    }
+                    return (
+                      <div key={t.id} className="flex items-center justify-between p-4 hover:bg-gray-50">
+                        <div>
+                          <p className="text-xs font-bold text-gray-800">
+                            {t.paciente + " "}
+                            <span className="font-normal text-gray-400">
+                              {" · " + t.documento}
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            {"📅 " + t.fecha + " " + t.hora + " · " + (t.motivo || "Sin motivo registrado")}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-[10px] text-gray-400">
+                              {"👤 " + t.medico}
+                            </p>
+                            {duracionStr && (
+                              <p className="text-[10px] text-blue-600 font-bold">
+                                {"⏱ Duración: " + duracionStr}
+                              </p>
+                            )}
+                            {t.horaInicio && (
+                              <p className="text-[10px] text-gray-400">
+                                {"🕐 " + t.horaInicio + (t.horaFin ? " → " + t.horaFin : "")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className={"text-[10px] font-black px-2 py-1 rounded-full " + estadoClass}>
+                            {estadoLabel}
                           </span>
-                        </p>
-                        <p className="text-[10px] text-gray-500 mt-0.5">
-                          📅 {t.fecha} {t.hora} ·{" "}
-                          {t.motivo || "Sin motivo registrado"}
-                        </p>
-                        <p className="text-[10px] text-gray-400">
-                          👤 {t.medico}
-                        </p>
+                          {t.estado === "completada" && (
+                            <button
+                              onClick={function () { crearHCDesdeTele(t); }}
+                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition"
+                            >
+                              {"📋 Crear HC de esta teleconsulta"}
+                            </button>
+                          )}
+                          {t.estado === "esperando" && (
+                            <button
+                              onClick={function () { handleIniciarConsulta(t.id); }}
+                              className="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg transition"
+                            >
+                              {"▶ Iniciar consulta"}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <span
-                        className={`text-[10px] font-black px-2 py-1 rounded-full ${
-                          t.estado === "activa"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        {t.estado === "activa"
-                          ? "🟢 En curso"
-                          : "✅ Completada"}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -29345,18 +31011,29 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
         const upd = usersList.map((u) => (u.id === userEditId ? userData : u));
         setUsersList(upd);
         _sync("siso_users", JSON.stringify(upd));
-        _sbSet("siso_users", upd); // Bloque 1: sync inmediato a Supabase
-        // Si el usuario editó su propio perfil, actualizar currentUser en memoria para reflejo inmediato
+        // ── SYNC INMEDIATO A SUPABASE (aplica para todos los usuarios activos) ──
+        _sbSet("siso_users", upd);
+        // ── Si es secretaria: guardar permisos en clave dedicada para recarga en tiempo real ──
+        if (userData.role === "secretaria") {
+          const permKey = `siso_permisos_${userData.user}`;
+          const permData = {
+            secretariaPermisos: userData.secretariaPermisos || SECRETARIA_PERMISOS_DEFAULT,
+            medicosAsignados: userData.medicosAsignados || [],
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentUser?.user || "admin",
+          };
+          _sbSet(permKey, permData);
+          _ls.setItem(permKey, JSON.stringify(permData));
+        }
+        // ── Si el usuario editó su propio perfil, actualizar currentUser en memoria ──
         if (
           userData.id === currentUser?.id ||
           userData.user === currentUser?.user
         ) {
           setCurrentUser((prev) => ({ ...prev, ...userData }));
-          // Sync dedicado de doctorData a Supabase (Bloque 1)
           if (userData.doctorData) {
             _sbSet(`siso_doctor_data_${userData.user}`, userData.doctorData);
           }
-          // También actualizar firma global si cambió
           if (userData.doctorData?.signature) {
             setDoctorSignature(userData.doctorData.signature);
             _sync("siso_doctor_signature", userData.doctorData.signature);
@@ -29364,7 +31041,7 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
           }
         }
         setUserEditId(null);
-        showAlert("✅ Perfil guardado. Los cambios se aplican de inmediato.");
+        showAlert("✅ Perfil guardado. Los cambios se aplican de inmediato para " + (userData.name || userData.user) + ".");
       };
       saveUser();
     };
@@ -32367,9 +34044,9 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
       {
         label: "Multi-usuario",
         libre: "1",
-        starter: "2",
-        pro: "3 médicos",
-        clinica: "Ilimitados",
+        starter: "1 médico",
+        pro: "1 médico",
+        clinica: "3 base + $45K c/u extra",
       },
       {
         label: "Almacenamiento nube",
@@ -33814,199 +35491,372 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
     const _billDocData = _examDocUser2?.doctorData || activeDoctorData;
     const _billDocSig = _examDocUser2?.doctorData?.firma || activeSignature;
     const EXAMENES_DB = [
-      // Laboratorio Clínico
-      "Hemograma completo (CBC)",
-      "Cuadro hemático",
-      "Hemograma con diferencial",
-      "Hematocrito y hemoglobina",
-      "Glicemia en ayunas",
-      "Glicemia posprandial",
-      "Hemoglobina glicosilada (HbA1c)",
-      "Glucosa sérica",
-      "Creatinina sérica",
-      "BUN (nitrógeno ureico)",
-      "Ácido úrico",
-      "Urea",
-      "Perfil lipídico completo",
-      "Colesterol total",
-      "Colesterol HDL",
-      "Colesterol LDL",
-      "Triglicéridos",
-      "Pruebas de función hepática",
-      "ALT (TGP)",
-      "AST (TGO)",
-      "Fosfatasa alcalina",
-      "Bilirrubinas totales y fraccionadas",
-      "TSH (hormona estimulante de tiroides)",
-      "T3 libre",
-      "T4 libre",
-      "Perfil tiroideo",
-      "Sodio sérico",
-      "Potasio sérico",
-      "Cloro sérico",
-      "Calcio sérico",
-      "Magnesio sérico",
-      "Fósforo sérico",
-      "Proteína C reactiva (PCR)",
-      "PCR ultrasensible",
-      "VSG (velocidad de sedimentación globular)",
-      "Parcial de orina (uroanálisis)",
-      "Urocultivo",
-      "Coprocultivo",
-      "Coproscópico",
-      "Tiempo de protrombina (TP)",
-      "Tiempo de tromboplastina (PTT)",
-      "INR",
-      "Tiempo de sangría",
-      "Ferritina",
-      "Hierro sérico",
-      "Transferrina",
-      "Saturación de transferrina",
-      "Vitamina B12",
-      "Ácido fólico",
-      "Vitamina D (25-OH)",
-      "Calcio iónico",
-      "Parathormona (PTH)",
-      "PSA (antígeno prostático)",
-      "PSA libre",
-      "AFP (alfa fetoproteína)",
-      "CEA",
-      "CA 19-9",
-      "CA 125",
-      "VDRL",
-      "FTA-ABS",
-      "Prueba de VIH (ELISA)",
-      "Antígeno de superficie hepatitis B (HBsAg)",
-      "Anti-HBs",
-      "Anti-HBc total",
-      "Anti-VHC",
-      "Carga viral VIH",
-      "PCR para hepatitis C",
-      "Prueba de embarazo (Beta HCG)",
-      "FSH",
-      "LH",
-      "Estradiol",
-      "Progesterona",
-      "Testosterona total",
-      "Prolactina",
-      "DHEA-S",
-      "Cortisol sérico (8am)",
-      "Cortisol en orina 24h",
-      "Espermograma",
-      "Proteína en orina 24h",
-      "Creatinuria en orina 24h",
-      // Imagenología
-      "Radiografía de tórax PA y lateral",
-      "Radiografía columna lumbosacra AP y lateral",
-      "Radiografía columna cervical AP y lateral",
-      "Radiografía de manos AP bilateral",
-      "Radiografía de pelvis AP",
-      "Radiografía de rodilla AP y lateral",
-      "Radiografía de pies bilateral",
-      "Radiografía de cráneo",
-      "Radiografía de senos paranasales",
-      "Ecografía abdominal total",
-      "Ecografía pélvica transabdominal",
-      "Ecografía pélvica transvaginal",
-      "Ecografía de tiroides",
-      "Ecografía de mama bilateral",
-      "Ecografía de partes blandas",
-      "Ecografía renal y vías urinarias",
-      "Ecografía Doppler venoso miembros inferiores",
-      "Ecografía Doppler arterial miembros inferiores",
-      "Ecografía de cuello",
-      "TAC de cráneo simple",
-      "TAC de cráneo con contraste",
-      "TAC de tórax simple",
-      "TAC de tórax con contraste",
-      "TAC de abdomen y pelvis con contraste",
-      "TAC de columna lumbosacra",
-      "TAC de columna cervical",
-      "TAC de huesos y articulaciones",
-      "Resonancia magnética de cráneo",
-      "Resonancia magnética de columna lumbar",
-      "Resonancia magnética de columna cervical",
-      "Resonancia magnética de rodilla",
-      "Resonancia magnética de hombro",
-      "Resonancia magnética de cadera",
-      "Gamagrafía ósea",
-      "Gamagrafía tiroidea",
-      "Densitometría ósea (DXA)",
-      "Mamografía bilateral",
-      "Mamografía digital bilateral",
-      // Cardiología / Fisiología
-      "Electrocardiograma (ECG) de 12 derivaciones",
-      "Electrocardiograma en reposo",
-      "Ecocardiograma transtorácico",
-      "Ecocardiograma con Doppler",
-      "Prueba de esfuerzo (ergometría)",
-      "Holter de ritmo 24 horas",
-      "Holter de presión arterial (MAPA)",
-      "Espirometría simple",
-      "Espirometría con broncodilatador",
-      "Pleuroscopia",
-      "Audiometría",
-      "Audiometría tonal",
-      "Audiometría de palabras",
-      "Impedanciometría",
-      "Optometría",
-      "Agudeza visual",
-      "Tonometría ocular",
-      "Campimetría",
-      "Electroencefalograma (EEG)",
-      "Electromiografía (EMG)",
-      "Velocidad de conducción nerviosa",
-      // Procedimientos
-      "Endoscopia digestiva alta",
-      "Colonoscopia",
-      "Colonoscopia con toma de biopsia",
-      "Gastroscopia",
-      "Rectosigmoidoscopia",
-      "CPRE (colangiopancreatografía retrógrada)",
-      "Culdocentesis",
-      "Amniocentesis",
-      "Biopsia de piel",
-      "Biopsia de ganglio",
-      "Biopsia de próstata guiada por ecografía",
-      "Biopsia de mama guiada",
-      "Punción lumbar",
-      "Punción aspiración con aguja fina (PAAF) tiroides",
-      "Drenaje de absceso",
-      "Curación de herida",
-      "Citología cervicouterina (PAP)",
-      "Colposcopia",
-      "Histeroscopia",
-      "Laparoscopia diagnóstica",
-      // Medicina Laboral / Ocupacional
-      "Espirometría ocupacional",
-      "Audiometría ocupacional",
-      "Optometría ocupacional",
-      "Visiometría",
-      "Examen de optometría y visiometría",
+      // ═══ LABORATORIO CLÍNICO — GENERALES/BÁSICOS ═══
+      "Hemograma completo (CBC) [CUPS: 902210]",
+      "Cuadro hemático [CUPS: 902210]",
+      "Hemograma con diferencial [CUPS: 902218]",
+      "Hematocrito y hemoglobina [CUPS: 902209]",
+      "Glicemia en ayunas [CUPS: 903841]",
+      "Glicemia posprandial [CUPS: 903842]",
+      "Hemoglobina glicosilada (HbA1c) [CUPS: 903427]",
+      "Glucosa sérica [CUPS: 903841]",
+      "Creatinina sérica [CUPS: 903895]",
+      "BUN (nitrógeno ureico) [CUPS: 903856]",
+      "Ácido úrico [CUPS: 903868]",
+      "Urea [CUPS: 903856]",
+      "Perfil lipídico completo [CUPS: 903818]",
+      "Colesterol total [CUPS: 903818]",
+      "Colesterol HDL [CUPS: 903815]",
+      "Colesterol LDL [CUPS: 903816]",
+      "Triglicéridos [CUPS: 903868]",
+      "VLDL [CUPS: 903817]",
+      "Pruebas de función hepática [CUPS: 903866]",
+      "ALT (TGP) [CUPS: 903866]",
+      "AST (TGO) [CUPS: 903867]",
+      "Fosfatasa alcalina [CUPS: 903835]",
+      "GGT (gamma glutamil transferasa) [CUPS: 903849]",
+      "Bilirrubinas totales y fraccionadas [CUPS: 903809]",
+      "Proteínas totales y fraccionadas [CUPS: 903861]",
+      "Albúmina sérica [CUPS: 903801]",
+      "LDH (lactato deshidrogenasa) [CUPS: 903829]",
+      "CPK total [CUPS: 903825]",
+      "CPK-MB [CUPS: 903826]",
+      "Troponina I [CUPS: 903870]",
+      "Troponina T ultrasensible [CUPS: 903871]",
+      "BNP / NT-proBNP [CUPS: 903807]",
+      "Parcial de orina (uroanálisis) [CUPS: 907106]",
+      "Urocultivo [CUPS: 901235]",
+      "Coprocultivo [CUPS: 901221]",
+      "Coproscópico [CUPS: 907002]",
+      "Sangre oculta en heces [CUPS: 907003]",
+      // ═══ ELECTROLITOS ═══
+      "Sodio sérico [CUPS: 903862]",
+      "Potasio sérico [CUPS: 903859]",
+      "Cloro sérico [CUPS: 903822]",
+      "Calcio sérico [CUPS: 903811]",
+      "Calcio iónico [CUPS: 903812]",
+      "Magnesio sérico [CUPS: 903851]",
+      "Fósforo sérico [CUPS: 903837]",
+      "Bicarbonato (CO2 total) [CUPS: 903831]",
+      // ═══ CARDIOVASCULARES ═══
+      "Electrocardiograma (ECG) de 12 derivaciones [CUPS: 895101]",
+      "Electrocardiograma en reposo [CUPS: 895101]",
+      "Ecocardiograma transtorácico [CUPS: 881202]",
+      "Ecocardiograma con Doppler [CUPS: 881203]",
+      "Ecocardiograma con Doppler color [CUPS: 881204]",
+      "Ecocardiograma transesofágico [CUPS: 881205]",
+      "Prueba de esfuerzo (ergometría) [CUPS: 895301]",
+      "Holter de ritmo 24 horas [CUPS: 895201]",
+      "Holter de presión arterial (MAPA) [CUPS: 895202]",
+      "Valoración de riesgo cardiovascular (Framingham)",
+      "Índice tobillo-brazo (ITB)",
+      "Eco Doppler carotídeo [CUPS: 882302]",
+      "Eco Doppler de vasos de cuello [CUPS: 882301]",
+      "Angiografía coronaria [CUPS: 877101]",
+      "Angiotomografía coronaria (Angio-TAC) [CUPS: 879201]",
+      "Cateterismo cardíaco [CUPS: 377101]",
+      // ═══ CONTROL METABÓLICO / PESO ═══
+      "TSH (hormona estimulante de tiroides) [CUPS: 904902]",
+      "T3 libre [CUPS: 904903]",
+      "T4 libre [CUPS: 904904]",
+      "T3 total [CUPS: 904905]",
+      "T4 total [CUPS: 904906]",
+      "Perfil tiroideo [CUPS: 904902]",
+      "Insulina en ayunas [CUPS: 904218]",
+      "Índice HOMA-IR",
+      "Péptido C [CUPS: 904219]",
+      "Curva de tolerancia a glucosa (PTOG 75g) [CUPS: 903845]",
+      "Microalbuminuria [CUPS: 907107]",
+      "Relación albúmina/creatinina en orina [CUPS: 907108]",
+      "Ácidos grasos libres",
+      "Leptina sérica",
+      "Cortisol sérico (8am) [CUPS: 904210]",
+      "Cortisol en orina 24h [CUPS: 904211]",
+      // ═══ PREQUIRÚRGICOS ═══
+      "Hemograma prequirúrgico [CUPS: 902210]",
+      "Grupo sanguíneo y Rh [CUPS: 902004]",
+      "Tiempos de coagulación (PT/INR, PTT) [CUPS: 902050]",
+      "Tiempo de protrombina (TP) [CUPS: 902049]",
+      "Tiempo de tromboplastina (PTT) [CUPS: 902048]",
+      "INR [CUPS: 902050]",
+      "Tiempo de sangría [CUPS: 902046]",
+      "Glicemia prequirúrgica [CUPS: 903841]",
+      "BUN prequirúrgico [CUPS: 903856]",
+      "Creatinina prequirúrgica [CUPS: 903895]",
+      "Electrolitos prequirúrgicos (Na, K, Cl) [CUPS: 903862]",
+      "EKG prequirúrgico [CUPS: 895101]",
+      "Radiografía de tórax prequirúrgica [CUPS: 871121]",
+      "Valoración preanestésica [CUPS: 890205]",
+      "Pruebas cruzadas (compatibilidad sanguínea) [CUPS: 902005]",
+      "Recuento de plaquetas [CUPS: 902230]",
+      "Fibrinógeno [CUPS: 902041]",
+      // ═══ POSTQUIRÚRGICOS ═══
+      "Hemograma de control postquirúrgico [CUPS: 902210]",
+      "PCR postquirúrgica [CUPS: 903860]",
+      "VSG (velocidad de sedimentación globular) [CUPS: 902205]",
+      "Proteína C reactiva (PCR) [CUPS: 903860]",
+      "PCR ultrasensible [CUPS: 903860]",
+      "Perfil metabólico postquirúrgico",
+      "Gases arteriales [CUPS: 903602]",
+      "Dímero D [CUPS: 902038]",
+      "Procalcitonina [CUPS: 906847]",
+      "Hemocultivos [CUPS: 901210]",
+      // ═══ INFECCIOSAS / SEROLOGÍA ═══
+      "VDRL [CUPS: 906919]",
+      "FTA-ABS [CUPS: 906920]",
+      "Prueba de VIH (ELISA) [CUPS: 906249]",
+      "Western Blot VIH [CUPS: 906250]",
+      "Carga viral VIH [CUPS: 906251]",
+      "Antígeno de superficie hepatitis B (HBsAg) [CUPS: 906221]",
+      "Anti-HBs [CUPS: 906223]",
+      "Anti-HBc total [CUPS: 906222]",
+      "Anti-VHC [CUPS: 906224]",
+      "PCR para hepatitis C [CUPS: 906225]",
+      "IgM para hepatitis A [CUPS: 906220]",
+      "Serología completa",
+      "Hemocultivos [CUPS: 901210]",
+      "Prueba de tuberculina (PPD) [CUPS: 860205]",
+      "IGRA (QuantiFERON TB Gold) [CUPS: 906841]",
+      "BK seriado (baciloscopia) [CUPS: 901101]",
+      "Gota gruesa (malaria) [CUPS: 901301]",
+      // ═══ HEMATOLOGÍA ESPECIAL ═══
+      "Ferritina [CUPS: 903833]",
+      "Hierro sérico [CUPS: 903850]",
+      "Transferrina [CUPS: 903869]",
+      "Saturación de transferrina [CUPS: 903869]",
+      "Vitamina B12 [CUPS: 903878]",
+      "Ácido fólico [CUPS: 903800]",
+      "Vitamina D (25-OH) [CUPS: 903879]",
+      "Reticulocitos [CUPS: 902237]",
+      "Frotis de sangre periférica [CUPS: 902201]",
+      "Electroforesis de hemoglobina [CUPS: 902216]",
+      "Coombs directo [CUPS: 902008]",
+      "Coombs indirecto [CUPS: 902009]",
+      // ═══ COAGULACIÓN ═══
+      "Antitrombina III [CUPS: 902032]",
+      "Proteína C funcional [CUPS: 902033]",
+      "Proteína S funcional [CUPS: 902034]",
+      "Anticoagulante lúpico [CUPS: 902031]",
+      "Anticuerpos anticardiolipina [CUPS: 906102]",
+      "Anti-Beta 2 glicoproteína I [CUPS: 906103]",
+      // ═══ MARCADORES TUMORALES ═══
+      "PSA (antígeno prostático) [CUPS: 906313]",
+      "PSA libre [CUPS: 906314]",
+      "AFP (alfa fetoproteína) [CUPS: 906302]",
+      "CEA [CUPS: 906304]",
+      "CA 19-9 [CUPS: 906303]",
+      "CA 125 [CUPS: 906305]",
+      "CA 15-3 [CUPS: 906306]",
+      "Beta HCG cuantitativa [CUPS: 904216]",
+      // ═══ HORMONALES / REPRODUCTIVOS ═══
+      "Prueba de embarazo (Beta HCG) [CUPS: 904216]",
+      "FSH [CUPS: 904214]",
+      "LH [CUPS: 904215]",
+      "Estradiol [CUPS: 904212]",
+      "Progesterona [CUPS: 904220]",
+      "Testosterona total [CUPS: 904224]",
+      "Testosterona libre [CUPS: 904225]",
+      "Prolactina [CUPS: 904221]",
+      "DHEA-S [CUPS: 904211]",
+      "17-OH progesterona [CUPS: 904201]",
+      "Espermograma [CUPS: 907501]",
+      // ═══ FUNCIÓN RENAL ═══
+      "Depuración de creatinina [CUPS: 903896]",
+      "Proteína en orina 24h [CUPS: 907109]",
+      "Creatinuria en orina 24h [CUPS: 907110]",
+      "Cistatina C [CUPS: 903897]",
+      "Electrolitos en orina 24h [CUPS: 907111]",
+      // ═══ INMUNOLOGÍA / AUTOINMUNIDAD ═══
+      "ANA (anticuerpos antinucleares) [CUPS: 906104]",
+      "Anti-DNA doble cadena [CUPS: 906105]",
+      "Factor reumatoideo [CUPS: 906110]",
+      "Anti-CCP (anti péptido citrulinado) [CUPS: 906106]",
+      "ANCA (c-ANCA, p-ANCA) [CUPS: 906101]",
+      "Complemento C3 y C4 [CUPS: 906107]",
+      "Inmunoglobulinas (IgA, IgG, IgM, IgE) [CUPS: 906108]",
+      "HLA-B27 [CUPS: 906109]",
+      // ═══ TOXICOLOGÍA OCUPACIONAL ═══
+      "Plomo en sangre (plombemia) [CUPS: 903609]",
+      "Protoporfirina zinc (ZPP) [CUPS: 903610]",
+      "Ácido delta aminolevulínico en orina [CUPS: 903601]",
+      "Mercurio en orina [CUPS: 903607]",
+      "Cadmio en sangre [CUPS: 903603]",
+      "Arsénico en orina [CUPS: 903602]",
+      "Colinesterasa sérica [CUPS: 903823]",
+      "Colinesterasa eritrocitaria [CUPS: 903824]",
+      "Ácido hipúrico en orina (tolueno) [CUPS: 903604]",
+      "Ácido mandélico en orina (estireno) [CUPS: 903605]",
+      "Ácido trans-mucónico (benceno) [CUPS: 903606]",
+      "Fenol en orina [CUPS: 903608]",
+      "Carboxihemoglobina [CUPS: 902215]",
+      "Metemoglobina [CUPS: 902225]",
+      "Cromo en orina [CUPS: 903611]",
+      "Níquel en orina [CUPS: 903612]",
+      "Manganeso en sangre [CUPS: 903613]",
+      "Prueba de drogas de abuso en orina (panel 5/10) [CUPS: 903614]",
+      "Cotinina en orina (nicotina) [CUPS: 903615]",
+      "Alcohol en sangre (alcoholemia) [CUPS: 903616]",
+      // ═══ IMAGENOLOGÍA ═══
+      "Radiografía de tórax PA y lateral [CUPS: 871121]",
+      "Radiografía columna lumbosacra AP y lateral [CUPS: 871040]",
+      "Radiografía columna cervical AP y lateral [CUPS: 871010]",
+      "Radiografía columna dorsal AP y lateral [CUPS: 871020]",
+      "Radiografía de manos AP bilateral [CUPS: 873320]",
+      "Radiografía de pelvis AP [CUPS: 872200]",
+      "Radiografía de rodilla AP y lateral [CUPS: 873430]",
+      "Radiografía de pies bilateral [CUPS: 873510]",
+      "Radiografía de cráneo [CUPS: 870100]",
+      "Radiografía de senos paranasales [CUPS: 870300]",
+      "Radiografía de hombro AP [CUPS: 873110]",
+      "Radiografía de cadera AP [CUPS: 872210]",
+      "Radiografía de muñeca AP y lateral [CUPS: 873310]",
+      "Ecografía abdominal total [CUPS: 881302]",
+      "Ecografía pélvica transabdominal [CUPS: 881401]",
+      "Ecografía pélvica transvaginal [CUPS: 881402]",
+      "Ecografía de tiroides [CUPS: 881101]",
+      "Ecografía de mama bilateral [CUPS: 881501]",
+      "Ecografía de partes blandas [CUPS: 881601]",
+      "Ecografía renal y vías urinarias [CUPS: 881303]",
+      "Ecografía Doppler venoso miembros inferiores [CUPS: 882301]",
+      "Ecografía Doppler arterial miembros inferiores [CUPS: 882302]",
+      "Ecografía de cuello [CUPS: 881102]",
+      "Ecografía testicular [CUPS: 881602]",
+      "Ecografía de hombro [CUPS: 881603]",
+      "TAC de cráneo simple [CUPS: 879101]",
+      "TAC de cráneo con contraste [CUPS: 879102]",
+      "TAC de tórax simple [CUPS: 879201]",
+      "TAC de tórax con contraste [CUPS: 879202]",
+      "TAC de abdomen y pelvis con contraste [CUPS: 879302]",
+      "TAC de columna lumbosacra [CUPS: 879401]",
+      "TAC de columna cervical [CUPS: 879402]",
+      "TAC de huesos y articulaciones [CUPS: 879501]",
+      "Resonancia magnética de cráneo [CUPS: 883101]",
+      "Resonancia magnética de columna lumbar [CUPS: 883201]",
+      "Resonancia magnética de columna cervical [CUPS: 883202]",
+      "Resonancia magnética de columna dorsal [CUPS: 883203]",
+      "Resonancia magnética de rodilla [CUPS: 883301]",
+      "Resonancia magnética de hombro [CUPS: 883302]",
+      "Resonancia magnética de cadera [CUPS: 883303]",
+      "Resonancia magnética de muñeca [CUPS: 883304]",
+      "Resonancia magnética de tobillo [CUPS: 883305]",
+      "Gamagrafía ósea [CUPS: 886101]",
+      "Gamagrafía tiroidea [CUPS: 886201]",
+      "Densitometría ósea (DXA) [CUPS: 886301]",
+      "Mamografía bilateral [CUPS: 874101]",
+      "Mamografía digital bilateral [CUPS: 874102]",
+      "PET-CT (Tomografía por emisión de positrones) [CUPS: 886401]",
+      // ═══ FISIOLOGÍA / MEDICINA OCUPACIONAL ═══
+      "Espirometría simple [CUPS: 893801]",
+      "Espirometría con broncodilatador [CUPS: 893802]",
+      "Espirometría ocupacional [CUPS: 893801]",
+      "Audiometría [CUPS: 892201]",
+      "Audiometría tonal [CUPS: 892201]",
+      "Audiometría de palabras [CUPS: 892202]",
+      "Audiometría ocupacional [CUPS: 892201]",
+      "Impedanciometría [CUPS: 892203]",
+      "Logoaudiometría [CUPS: 892204]",
+      "Potenciales evocados auditivos (BERA) [CUPS: 892205]",
+      "Emisiones otoacústicas [CUPS: 892206]",
+      "Optometría [CUPS: 890203]",
+      "Optometría ocupacional [CUPS: 890203]",
+      "Visiometría [CUPS: 890203]",
+      "Examen de optometría y visiometría [CUPS: 890203]",
+      "Agudeza visual [CUPS: 890203]",
+      "Tonometría ocular [CUPS: 890901]",
+      "Campimetría [CUPS: 890902]",
+      "Fondo de ojo [CUPS: 890903]",
+      "Test de Ishihara (visión cromática) [CUPS: 890904]",
+      "Evaluación osteomuscular [CUPS: 890401]",
       "Perfil de columna ocupacional",
-      "Evaluación osteomuscular",
       "Test de Wells",
       "Test de Phalen",
       "Test de Tinel",
-      "Valoración de riesgo cardiovascular (Framingham)",
-      "Índice tobillo-brazo (ITB)",
-      "Glicemia en ayunas (preocupacional)",
-      "Perfil lipídico (preocupacional)",
-      "Hemograma (preocupacional)",
-      "Cuadro hemático (preocupacional)",
-      "Hepatitis B antígeno (HBsAg)",
-      "Serología completa",
-      "Tamizaje VIH",
-      // Psicología / Neuropsicología
-      "Test de Minnesota (MMPI)",
-      "Test de Bender",
-      "Test de matrices de Raven",
-      "Evaluación neuropsicológica",
-      "Evaluación psicológica forense",
-      "Test de personalidad",
-      "Evaluación de aptitudes laborales",
-      "Evaluación de estrés laboral (Bonn)",
-      "Evaluación del riesgo psicosocial",
+      "Test de Finkelstein",
+      "Test de Neer",
+      "Test de Hawkins",
+      "Test de Jobe",
+      "Test de Spurling",
+      "Test de Lasègue",
+      "Test de Adams (escoliosis)",
+      "Test de Romberg",
+      "Dinamometría de mano [CUPS: 890402]",
+      "Glicemia en ayunas (preocupacional) [CUPS: 903841]",
+      "Perfil lipídico (preocupacional) [CUPS: 903818]",
+      "Hemograma (preocupacional) [CUPS: 902210]",
+      "Cuadro hemático (preocupacional) [CUPS: 902210]",
+      "Hepatitis B antígeno (HBsAg) [CUPS: 906221]",
+      "Tamizaje VIH [CUPS: 906249]",
+      "Pleuroscopia [CUPS: 342201]",
+      "Electroencefalograma (EEG) [CUPS: 895601]",
+      "Electromiografía (EMG) [CUPS: 895701]",
+      "Velocidad de conducción nerviosa [CUPS: 895702]",
+      // ═══ SALUD MENTAL ═══
+      "Escala de ansiedad y depresión de Goldberg (EADG) [CUPS: 890801]",
+      "Cuestionario de depresión PHQ-9 [CUPS: 890802]",
+      "Cuestionario de ansiedad GAD-7 [CUPS: 890803]",
+      "Test AUDIT (uso de alcohol) [CUPS: 890804]",
+      "Cuestionario CAGE (alcoholismo)",
+      "Inventario de Burnout de Maslach (MBI) [CUPS: 890805]",
+      "Escala de estrés percibido (PSS-14)",
+      "Cuestionario de riesgo psicosocial (Batería Min. Salud Res. 2764/2022) [CUPS: 890806]",
+      "Evaluación neuropsicológica [CUPS: 890807]",
+      "Evaluación psicológica forense [CUPS: 890808]",
+      "Valoración psiquiátrica [CUPS: 890201]",
+      "Valoración psicológica [CUPS: 890208]",
+      "Test de Minnesota (MMPI) [CUPS: 890809]",
+      "Test de Bender [CUPS: 890810]",
+      "Test de matrices de Raven [CUPS: 890811]",
+      "Test de personalidad [CUPS: 890812]",
+      "Evaluación de aptitudes laborales [CUPS: 890813]",
+      "Evaluación de estrés laboral (Bonn) [CUPS: 890814]",
+      "Evaluación del riesgo psicosocial [CUPS: 890815]",
+      "Escala de Hamilton (depresión) [CUPS: 890816]",
+      "Escala de Beck (depresión) [CUPS: 890817]",
+      "Escala de Columbia (riesgo suicida) [CUPS: 890818]",
+      "MoCA (evaluación cognitiva Montreal) [CUPS: 890819]",
+      "Mini Mental State Examination (MMSE) [CUPS: 890820]",
+      // ═══ PROCEDIMIENTOS ═══
+      "Endoscopia digestiva alta [CUPS: 441101]",
+      "Colonoscopia [CUPS: 452101]",
+      "Colonoscopia con toma de biopsia [CUPS: 452102]",
+      "Gastroscopia [CUPS: 441102]",
+      "Rectosigmoidoscopia [CUPS: 452001]",
+      "CPRE (colangiopancreatografía retrógrada) [CUPS: 512101]",
+      "Biopsia de piel [CUPS: 861201]",
+      "Biopsia de ganglio [CUPS: 861301]",
+      "Biopsia de próstata guiada por ecografía [CUPS: 861401]",
+      "Biopsia de mama guiada [CUPS: 861501]",
+      "Punción lumbar [CUPS: 030301]",
+      "Punción aspiración con aguja fina (PAAF) tiroides [CUPS: 861601]",
+      "Drenaje de absceso [CUPS: 860101]",
+      "Curación de herida [CUPS: 860201]",
+      "Citología cervicouterina (PAP) [CUPS: 892301]",
+      "Colposcopia [CUPS: 692101]",
+      "Histeroscopia [CUPS: 692201]",
+      "Laparoscopia diagnóstica [CUPS: 541001]",
+      "Cistoscopia [CUPS: 571101]",
+      "Broncoscopia [CUPS: 331101]",
+      // ═══ VALORACIONES MÉDICAS ═══
+      "Consulta de medicina general [CUPS: 890101]",
+      "Consulta de medicina especializada [CUPS: 890201]",
+      "Consulta de medicina del trabajo [CUPS: 890202]",
+      "Consulta de control o seguimiento [CUPS: 890301]",
+      "Valoración por fisioterapia [CUPS: 890501]",
+      "Valoración por terapia ocupacional [CUPS: 890502]",
+      "Valoración por fonoaudiología [CUPS: 890503]",
+      "Valoración por nutrición [CUPS: 890504]",
+      "Valoración por psicología [CUPS: 890208]",
+      "Valoración por trabajo social [CUPS: 890505]",
+      "Consulta de urgencias [CUPS: 890601]",
+      // ═══ CONTROL GENERAL SEGÚN PATOLOGÍA ═══
+      "Control de HTA: perfil lipídico + creatinina + electrolitos + EKG",
+      "Control de diabetes: HbA1c + perfil lipídico + creatinina + microalbuminuria + fondo de ojo",
+      "Control de hipotiroidismo: TSH + T4L",
+      "Control de dislipidemia: perfil lipídico completo",
+      "Control de enfermedad renal: creatinina + BUN + electrolitos + parcial de orina",
+      "Control de EPOC: espirometría + radiografía de tórax + gases arteriales",
+      "Control de asma ocupacional: espirometría seriada + PEF",
+      "Control de hipoacusia: audiometría de control",
     ];
     // States moved to component level (no hooks in conditionals - React rule)
     const showSuggs = showExamSuggs;
@@ -34495,6 +36345,20 @@ RESPONDE ÚNICAMENTE JSON VÁLIDO sin texto previo ni bloques markdown:
                       </span>
                     )}
                   </span>
+                  <label className="flex items-center gap-1 text-[10px] text-blue-600 font-bold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={ex.incluirEnRecomendaciones || false}
+                      onChange={(e) => {
+                        const u = [...examList];
+                        u[i] = { ...u[i], incluirEnRecomendaciones: e.target.checked };
+                        setExamList(u);
+                        setData((p) => ({ ...p, solicitudExamenes: u }));
+                      }}
+                      className="accent-blue-500"
+                    />
+                    Incluir en Recomendaciones
+                  </label>
                   <label className="flex items-center gap-1 text-[10px] text-red-600 font-bold cursor-pointer">
                     <input
                       type="checkbox"
@@ -35189,13 +37053,24 @@ th{background:#fee2e2;font-weight:900;text-align:left;color:#7f1d1d;}
             (_asEmp && p.empresaNit === _asEmp.nit)
         );
       }
+      // SECRETARIA: busca en pacientes de TODOS los médicos asignados
+      if (currentUser?.role === "secretaria") {
+        const secU = usersList.find(u => u.user === currentUser.user);
+        const asig = secU?.medicosAsignados || [];
+        if (asig.length > 0) {
+          _agendaSearchBase = patientsList.filter(p => !p._medicoId || asig.includes(p._medicoId));
+        } else {
+          _agendaSearchBase = patientsList;
+        }
+      }
       const found = _agendaSearchBase
         .filter(
           (p) =>
             p.nombres?.toLowerCase().includes(q) ||
-            p.docNumero?.toLowerCase().includes(q)
+            p.docNumero?.toLowerCase().includes(q) ||
+            p.celular?.toLowerCase().includes(q)
         )
-        .slice(0, 6);
+        .slice(0, 8);
       setAgendaSuggs(found);
     };
     const seleccionarPaciente = (p) => {
@@ -35237,14 +37112,21 @@ th{background:#fee2e2;font-weight:900;text-align:left;color:#7f1d1d;}
       }));
       setAgendaSuggs([]);
     };
-    // ── Calcular edad automática ───────────────────────────────────
+    // ── Calcular edad automática (FIX: timezone-safe) ─────────────
     const calcEdad = (fNac) => {
       if (!fNac) return "";
+      // Parsear como fecha local para evitar desfase UTC
+      const parts = String(fNac).split("-");
+      if (parts.length !== 3) return "";
+      const nacY = parseInt(parts[0], 10);
+      const nacM = parseInt(parts[1], 10) - 1;
+      const nacD = parseInt(parts[2], 10);
+      if (isNaN(nacY) || isNaN(nacM) || isNaN(nacD)) return "";
       const hoy = new Date();
-      const nac = new Date(fNac);
-      let edad = hoy.getFullYear() - nac.getFullYear();
-      const m = hoy.getMonth() - nac.getMonth();
-      if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
+      let edad = hoy.getFullYear() - nacY;
+      const mDiff = hoy.getMonth() - nacM;
+      if (mDiff < 0 || (mDiff === 0 && hoy.getDate() < nacD)) edad--;
+      if (edad < 0) edad = 0;
       return String(edad);
     };
     // ── Registrar / Agendar paciente ───────────────────────────────
@@ -35261,6 +37143,14 @@ th{background:#fee2e2;font-weight:900;text-align:left;color:#7f1d1d;}
       const horaCita = agendaForm.horaCita || horaActual();
       const duracion = DURACION[agendaForm.tipoConsulta] || 20;
       const horaFin = addMins(horaCita, duracion);
+      // ── Bloqueo de horarios superpuestos ──
+      const overlap = agendados.some(function (a) {
+        return a.medicoId === agendaForm.medicoId && a.fecha === fechaCita && a.horaCita === horaCita && a.estado !== "atendido";
+      });
+      if (overlap) {
+        showAlert("⚠️ Ya existe una cita para este médico a las " + horaCita + ". Elija otro horario.");
+        return;
+      }
       const esHoy = fechaCita === today;
       const nuevo = {
         id: "ag_" + Date.now(),
@@ -35321,7 +37211,25 @@ th{background:#fee2e2;font-weight:900;text-align:left;color:#7f1d1d;}
             }
           : {}),
       };
-      saveAgendados([...agendados, nuevo]);
+      // ── Citas recurrentes ──
+      var allNew = [nuevo];
+      if (agendaRecurrente) {
+        var mesesAdd = agendaRecurrenciaPeriodo === "3m" ? 3 : agendaRecurrenciaPeriodo === "6m" ? 6 : 12;
+        var fechaFutura = new Date(fechaCita + "T12:00:00");
+        fechaFutura.setMonth(fechaFutura.getMonth() + mesesAdd);
+        var fechaFuturaStr = fechaFutura.toISOString().split("T")[0];
+        var recurrenteNuevo = Object.assign({}, nuevo, {
+          id: "ag_" + (Date.now() + 1),
+          fecha: fechaFuturaStr,
+          estado: "programado",
+          observacion: (nuevo.observacion ? nuevo.observacion + " | " : "") + "Control periodico (" + (mesesAdd === 3 ? "3 meses" : mesesAdd === 6 ? "6 meses" : "1 año") + ")",
+          registradoEn: nowISO(),
+        });
+        allNew.push(recurrenteNuevo);
+      }
+      saveAgendados(agendados.concat(allNew));
+      setAgendaRecurrente(false);
+      setAgendaRecurrenciaPeriodo("3m");
       setAgendaForm((p) => ({
         ...p,
         nombre: "",
@@ -35360,13 +37268,13 @@ th{background:#fee2e2;font-weight:900;text-align:left;color:#7f1d1d;}
       }));
       setAgendaSuggs([]);
       setAgendaTab("hoy");
-      showAlert(
-        `✅ ${
-          esHoy
-            ? "Paciente en sala de espera"
-            : "Cita programada para " + fechaCita + " a las " + horaCita
-        }.\nMédico: ${nuevo.medicoNombre} · Duración: ${duracion} min`
-      );
+      var alertMsg = esHoy ? "Paciente en sala de espera" : "Cita programada para " + fechaCita + " a las " + horaCita;
+      alertMsg += ".\nMédico: " + nuevo.medicoNombre + " · Duración: " + duracion + " min";
+      if (agendaRecurrente) {
+        var mesesLabel = agendaRecurrenciaPeriodo === "3m" ? "3 meses" : agendaRecurrenciaPeriodo === "6m" ? "6 meses" : "1 año";
+        alertMsg += "\n🔄 Control periódico programado en " + mesesLabel;
+      }
+      showAlert("✅ " + alertMsg);
     };
     // ── Iniciar atención ───────────────────────────────────────────
     const iniciarAtencion = (ag) => {
@@ -35615,8 +37523,18 @@ th{background:#fee2e2;font-weight:900;text-align:left;color:#7f1d1d;}
               onClick={() => eliminarCita(ag.id)}
               className="bg-red-50 text-red-600 px-2 py-1 rounded-lg text-[10px] font-bold hover:bg-red-100"
             >
-              🗑
+              {"🗑"}
             </button>
+          )}
+          {(ag.estado === "programado" || ag.estado === "espera") && ag.celular && (
+            <a
+              href={"https://wa.me/" + (ag.celular || "").replace(/\D/g, "") + "?text=" + encodeURIComponent("Recordatorio: Tiene cita medica ocupacional el " + ag.fecha + " a las " + ag.horaCita + " con el Dr. " + ag.medicoNombre + ". Por favor llegue 10 minutos antes.")}
+              target="_blank"
+              rel="noreferrer"
+              className="text-green-600 hover:text-green-700 text-[10px] font-bold bg-green-50 hover:bg-green-100 px-2 py-1 rounded-lg transition"
+            >
+              {"📱 WhatsApp"}
+            </a>
           )}
           <EstadoBadge ag={ag} />
         </div>
@@ -35668,24 +37586,23 @@ th{background:#fee2e2;font-weight:900;text-align:left;color:#7f1d1d;}
             ))}
           </div>
           {/* Tabs */}
-          <div className="flex gap-1 mb-4 bg-white rounded-xl shadow-sm border border-gray-100 p-1 w-fit">
+          <div className="flex gap-1 mb-4 bg-white rounded-xl shadow-sm border border-gray-100 p-1 w-fit flex-wrap">
             {[
-              { k: "hoy", l: `📋 Hoy (${miAgendaHoy.length})` },
-              { k: "proximas", l: `📅 Próximas (${proximas.length})` },
-              ...(isAdminOrSec ? [{ k: "nueva", l: "➕ Nueva Cita" }] : []),
-            ].map((t) => (
-              <button
-                key={t.k}
-                onClick={() => setAgendaTab(t.k)}
-                className={`px-4 py-2 rounded-lg text-xs font-black transition ${
-                  agendaTab === t.k
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-500 hover:bg-gray-100"
-                }`}
-              >
-                {t.l}
-              </button>
-            ))}
+              { k: "hoy", l: "📋 Hoy (" + miAgendaHoy.length + ")" },
+              { k: "proximas", l: "📅 Próximas (" + proximas.length + ")" },
+              { k: "semanal", l: "📅 Semanal" },
+              { k: "mensual", l: "📊 Mensual" },
+            ].concat(isAdminOrSec ? [{ k: "nueva", l: "➕ Nueva Cita" }] : []).map(function (t) {
+              return (
+                <button
+                  key={t.k}
+                  onClick={function () { setAgendaTab(t.k); }}
+                  className={"px-4 py-2 rounded-lg text-xs font-black transition " + (agendaTab === t.k ? "bg-blue-600 text-white" : "text-gray-500 hover:bg-gray-100")}
+                >
+                  {t.l}
+                </button>
+              );
+            })}
           </div>
           <div
             className={`grid gap-6 ${
@@ -35926,22 +37843,42 @@ th{background:#fee2e2;font-weight:900;text-align:left;color:#7f1d1d;}
                       className="w-full p-2 border-2 border-blue-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-300 outline-none"
                     />
                     {agendaSuggs.length > 0 && (
-                      <div className="absolute z-50 top-full left-0 w-full bg-white border border-blue-200 shadow-xl rounded-xl mt-1 max-h-52 overflow-y-auto">
-                        {agendaSuggs.map((p) => (
-                          <div
-                            key={p.id}
-                            onClick={() => seleccionarPaciente(p)}
-                            className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0"
-                          >
-                            <p className="font-bold text-sm text-gray-800">
-                              {p.nombres}
-                            </p>
-                            <p className="text-[10px] text-gray-400">
-                              {p.docTipo}: {p.docNumero} · {p.eps || "-"} ·{" "}
-                              {p.cargo || "-"}
-                            </p>
-                          </div>
-                        ))}
+                      <div className="absolute z-50 top-full left-0 w-full bg-white border-2 border-blue-200 shadow-2xl rounded-xl mt-1 max-h-72 overflow-y-auto">
+                        <div className="px-3 py-1.5 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
+                          <span className="text-[9px] font-black text-blue-600 uppercase">{agendaSuggs.length} paciente{agendaSuggs.length!==1?"s":""} encontrado{agendaSuggs.length!==1?"s":""}</span>
+                          <button onClick={() => setAgendaSuggs([])} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                        </div>
+                        {agendaSuggs.map((p) => {
+                          const medNombre = usersList.find(u => u.user === p._medicoId)?.name || p._medicoId || "";
+                          return (
+                            <div key={p.id} onClick={() => seleccionarPaciente(p)} className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-black text-sm text-gray-800 truncate">{p.nombres}</p>
+                                  <div className="flex flex-wrap gap-2 mt-0.5">
+                                    <span className="text-[9px] text-gray-500">{p.docTipo||"CC"}: <strong>{p.docNumero}</strong></span>
+                                    {p.edad && <span className="text-[9px] text-gray-400">{p.edad} años</span>}
+                                    {p.celular && <span className="text-[9px] text-gray-400">📱 {p.celular}</span>}
+                                    {p.eps && <span className="text-[9px] text-gray-400">EPS: {p.eps}</span>}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 mt-0.5">
+                                    {p.cargo && <span className="text-[9px] font-bold text-indigo-600">💼 {p.cargo}</span>}
+                                    {p.empresaNombre && <span className="text-[9px] text-gray-400 truncate max-w-[140px]">🏢 {p.empresaNombre}</span>}
+                                    {medNombre && <span className="text-[9px] text-emerald-600 font-bold">👨‍⚕️ {medNombre}</span>}
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0 text-right">
+                                  {p.estadoHistoria === "Cerrada" && p.conceptoAptitud && (
+                                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${p.conceptoAptitud.toLowerCase().includes("no apto")?"bg-red-100 text-red-700":"bg-emerald-100 text-emerald-700"}`}>
+                                      {p.conceptoAptitud.length > 20 ? p.conceptoAptitud.substring(0,20)+"…" : p.conceptoAptitud}
+                                    </span>
+                                  )}
+                                  <p className="text-[8px] text-gray-300 mt-0.5">{p.fechaExamen || ""}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -36394,13 +38331,43 @@ th{background:#fee2e2;font-weight:900;text-align:left;color:#7f1d1d;}
                       />
                     </div>
                   </div>
+                  {/* Citas recurrentes */}
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 mb-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={agendaRecurrente}
+                        onChange={function (e) { setAgendaRecurrente(e.target.checked); }}
+                        className="w-4 h-4 accent-purple-600"
+                      />
+                      <span className="text-xs font-bold text-purple-700">
+                        {"🔄 Programar control periódico"}
+                      </span>
+                    </label>
+                    {agendaRecurrente && (
+                      <div className="mt-2">
+                        <select
+                          value={agendaRecurrenciaPeriodo}
+                          onChange={function (e) { setAgendaRecurrenciaPeriodo(e.target.value); }}
+                          className="p-2 border border-purple-300 rounded-lg text-sm w-full"
+                        >
+                          <option value="3m">{"Cada 3 meses"}</option>
+                          <option value="6m">{"Cada 6 meses"}</option>
+                          <option value="1y">{"Cada 1 año"}</option>
+                        </select>
+                        <p className="text-[10px] text-purple-600 mt-1 font-bold">
+                          {"Se creará automáticamente una cita futura de control"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                   <button
                     onClick={registrarPaciente}
                     className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-black hover:bg-blue-700 flex items-center justify-center gap-2 shadow"
                   >
                     <UserCheck className="w-5 h-5" />
                     {agendaForm.fechaCita && agendaForm.fechaCita > today
-                      ? `📅 Programar cita para ${agendaForm.fechaCita}`
+                      ? "📅 Programar cita para " + agendaForm.fechaCita
                       : "✅ Registrar en sala de espera"}
                   </button>
                 </div>
@@ -36445,7 +38412,195 @@ th{background:#fee2e2;font-weight:900;text-align:left;color:#7f1d1d;}
                 </div>
               </div>
             )}
+            {/* ─── TAB: SEMANAL ─────────────────────────────────── */}
+            {agendaTab === "semanal" && (function () {
+              var hoy = new Date();
+              var diaSemana = hoy.getDay();
+              var diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
+              var lunes = new Date(hoy);
+              lunes.setDate(hoy.getDate() + diffLunes + (agendaSemanaOffset * 7));
+              var diasSemana = [];
+              var nombresDia = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+              for (var i = 0; i < 7; i++) {
+                var d = new Date(lunes);
+                d.setDate(lunes.getDate() + i);
+                diasSemana.push({
+                  fecha: d.toISOString().split("T")[0],
+                  nombre: nombresDia[i],
+                  dia: d.getDate(),
+                  mes: d.toLocaleDateString("es-CO", { month: "short" }),
+                });
+              }
+              var lunesStr = diasSemana[0].fecha;
+              var domStr = diasSemana[6].fecha;
+              return (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="bg-blue-50 px-5 py-3 border-b border-blue-100 flex items-center justify-between">
+                    <button
+                      onClick={function () { setAgendaSemanaOffset(agendaSemanaOffset - 1); }}
+                      className="text-blue-600 hover:text-blue-800 font-black text-sm px-2 py-1 rounded hover:bg-blue-100"
+                    >{"← Anterior"}</button>
+                    <p className="text-sm font-black text-blue-800">
+                      {"📅 Semana: " + lunesStr + " al " + domStr}
+                    </p>
+                    <button
+                      onClick={function () { setAgendaSemanaOffset(agendaSemanaOffset + 1); }}
+                      className="text-blue-600 hover:text-blue-800 font-black text-sm px-2 py-1 rounded hover:bg-blue-100"
+                    >{"Siguiente →"}</button>
+                  </div>
+                  <div className="grid grid-cols-7 divide-x divide-gray-100">
+                    {diasSemana.map(function (ds) {
+                      var citasDia = agendados.filter(function (a) {
+                        if (a.fecha !== ds.fecha) return false;
+                        if (_agendaEmpresaId) return a.empresaId === _agendaEmpresaId || a.medicoEmpresaId === _agendaEmpresaId;
+                        if (isAdminOrSec) return true;
+                        return a.medicoId === (currentUser && currentUser.user);
+                      }).sort(function (a, b) { return (a.horaCita || "").localeCompare(b.horaCita || ""); });
+                      var esHoyFlag = ds.fecha === today;
+                      return (
+                        <div key={ds.fecha} className={"min-h-[200px] " + (esHoyFlag ? "bg-blue-50/50" : "")}>
+                          <div className={"text-center py-2 border-b " + (esHoyFlag ? "bg-blue-100 border-blue-200" : "bg-gray-50 border-gray-100")}>
+                            <p className={"text-[10px] font-black " + (esHoyFlag ? "text-blue-700" : "text-gray-500")}>{ds.nombre}</p>
+                            <p className={"text-sm font-black " + (esHoyFlag ? "text-blue-800" : "text-gray-700")}>{ds.dia}</p>
+                            <p className="text-[9px] text-gray-400">{ds.mes}</p>
+                          </div>
+                          <div className="p-1 space-y-1">
+                            {citasDia.length === 0 && (
+                              <p className="text-[9px] text-gray-300 text-center py-4">{"-"}</p>
+                            )}
+                            {citasDia.map(function (ag) {
+                              var colorMap = { espera: "bg-yellow-100 border-yellow-300 text-yellow-800", atendiendo: "bg-blue-100 border-blue-300 text-blue-800", atendido: "bg-emerald-100 border-emerald-300 text-emerald-800", programado: "bg-purple-100 border-purple-300 text-purple-800" };
+                              var colorClass = colorMap[ag.estado] || colorMap.espera;
+                              return (
+                                <div key={ag.id} className={"p-1.5 rounded-lg border text-[9px] " + colorClass}>
+                                  <p className="font-black truncate">{ag.nombre}</p>
+                                  <p>{(ag.horaCita || ag.hora || "") + " · " + (ag.tipoConsulta || "").replace("_", " ")}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+            {/* ─── TAB: MENSUAL ─────────────────────────────────── */}
+            {agendaTab === "mensual" && (function () {
+              var hoy2 = new Date();
+              var mesActual = new Date(hoy2.getFullYear(), hoy2.getMonth() + agendaMesOffset, 1);
+              var anio = mesActual.getFullYear();
+              var mes = mesActual.getMonth();
+              var nombreMes = mesActual.toLocaleDateString("es-CO", { month: "long", year: "numeric" });
+              var primerDia = new Date(anio, mes, 1).getDay();
+              var offsetDia = primerDia === 0 ? 6 : primerDia - 1;
+              var diasEnMes = new Date(anio, mes + 1, 0).getDate();
+              var celdas = [];
+              for (var i2 = 0; i2 < offsetDia; i2++) celdas.push(null);
+              for (var d2 = 1; d2 <= diasEnMes; d2++) {
+                var fechaStr = anio + "-" + String(mes + 1).padStart(2, "0") + "-" + String(d2).padStart(2, "0");
+                var citasDia2 = agendados.filter(function (a) {
+                  if (a.fecha !== fechaStr) return false;
+                  if (_agendaEmpresaId) return a.empresaId === _agendaEmpresaId || a.medicoEmpresaId === _agendaEmpresaId;
+                  if (isAdminOrSec) return true;
+                  return a.medicoId === (currentUser && currentUser.user);
+                });
+                var totalDia = citasDia2.length;
+                var atendidasDia = citasDia2.filter(function (a) { return a.estado === "atendido"; }).length;
+                var pendientesDia = citasDia2.filter(function (a) { return a.estado === "espera" || a.estado === "programado"; }).length;
+                var ausentesDia = citasDia2.filter(function (a) { return a.estado === "ausente"; }).length;
+                var colorDia = totalDia === 0 ? "" : ausentesDia > 0 ? "bg-red-100 border-red-300" : pendientesDia > 0 ? "bg-yellow-100 border-yellow-300" : "bg-emerald-100 border-emerald-300";
+                celdas.push({ dia: d2, fecha: fechaStr, total: totalDia, color: colorDia, esHoy: fechaStr === today });
+              }
+              return (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="bg-purple-50 px-5 py-3 border-b border-purple-100 flex items-center justify-between">
+                    <button
+                      onClick={function () { setAgendaMesOffset(agendaMesOffset - 1); }}
+                      className="text-purple-600 hover:text-purple-800 font-black text-sm px-2 py-1 rounded hover:bg-purple-100"
+                    >{"← Anterior"}</button>
+                    <p className="text-sm font-black text-purple-800">
+                      {"📊 " + nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)}
+                    </p>
+                    <button
+                      onClick={function () { setAgendaMesOffset(agendaMesOffset + 1); }}
+                      className="text-purple-600 hover:text-purple-800 font-black text-sm px-2 py-1 rounded hover:bg-purple-100"
+                    >{"Siguiente →"}</button>
+                  </div>
+                  <div className="grid grid-cols-7">
+                    {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map(function (dn) {
+                      return <div key={dn} className="text-center text-[9px] font-black text-gray-500 py-2 bg-gray-50 border-b border-gray-100">{dn}</div>;
+                    })}
+                    {celdas.map(function (celda, idx) {
+                      if (!celda) return <div key={"empty_" + idx} className="min-h-[60px] border-b border-r border-gray-50" />;
+                      return (
+                        <div key={celda.fecha} className={"min-h-[60px] border-b border-r border-gray-100 p-1 " + (celda.esHoy ? "ring-2 ring-blue-400 ring-inset" : "") + " " + celda.color}>
+                          <p className={"text-xs font-black " + (celda.esHoy ? "text-blue-700" : "text-gray-700")}>{celda.dia}</p>
+                          {celda.total > 0 && (
+                            <p className="text-[10px] font-bold text-gray-600 mt-1">
+                              {celda.total + " cita" + (celda.total !== 1 ? "s" : "")}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex gap-4 text-[10px]">
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-200 border border-emerald-400 inline-block" /> {"Todas atendidas"}</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-200 border border-yellow-400 inline-block" /> {"Pendientes"}</span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-200 border border-red-400 inline-block" /> {"Ausencias"}</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
+          {/* ─── ESTADÍSTICAS DE AGENDA ─────────────────────────── */}
+          {(function () {
+            var hoyStats = miAgendaHoy;
+            var progHoy = hoyStats.filter(function (a) { return a.estado === "espera" || a.estado === "programado"; }).length;
+            var atendidosHoy = hoyStats.filter(function (a) { return a.estado === "atendido"; }).length;
+            var enEsperaHoy = hoyStats.filter(function (a) { return a.estado === "espera"; }).length;
+            var ausentesHoy = hoyStats.length - atendidosHoy - enEsperaHoy - hoyStats.filter(function (a) { return a.estado === "atendiendo"; }).length;
+            if (ausentesHoy < 0) ausentesHoy = 0;
+            // Semana
+            var hoyDate = new Date();
+            var diaSem = hoyDate.getDay();
+            var diffL = diaSem === 0 ? -6 : 1 - diaSem;
+            var lunesSem = new Date(hoyDate);
+            lunesSem.setDate(hoyDate.getDate() + diffL);
+            var domSem = new Date(lunesSem);
+            domSem.setDate(lunesSem.getDate() + 6);
+            var lunesStr2 = lunesSem.toISOString().split("T")[0];
+            var domStr2 = domSem.toISOString().split("T")[0];
+            var citasSemana = agendados.filter(function (a) {
+              if (a.fecha < lunesStr2 || a.fecha > domStr2) return false;
+              if (_agendaEmpresaId) return a.empresaId === _agendaEmpresaId || a.medicoEmpresaId === _agendaEmpresaId;
+              if (isAdminOrSec) return true;
+              return a.medicoId === (currentUser && currentUser.user);
+            });
+            var atendidosSemana = citasSemana.filter(function (a) { return a.estado === "atendido"; }).length;
+            var pendientesSemana = citasSemana.length - atendidosSemana;
+            return (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mt-4">
+                <p className="text-sm font-black text-gray-800 mb-2">{"📊 Resumen de Agenda"}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                    <p className="text-[10px] font-black text-blue-700 uppercase mb-1">{"Hoy"}</p>
+                    <p className="text-xs text-gray-700">
+                      {miAgendaHoy.length + " programadas | " + atendidosHoy + " atendidas | " + enEsperaHoy + " en espera" + (ausentesHoy > 0 ? " | " + ausentesHoy + " ausente" + (ausentesHoy !== 1 ? "s" : "") : "")}
+                    </p>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 border border-purple-100">
+                    <p className="text-[10px] font-black text-purple-700 uppercase mb-1">{"Semana"}</p>
+                    <p className="text-xs text-gray-700">
+                      {citasSemana.length + " citas | " + atendidosSemana + " atendidas | " + pendientesSemana + " pendientes"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     );
@@ -42388,6 +44543,7 @@ ${
         codigoEvolucion:
           evolucionForm.codigoEvolucion ||
           "EV-" + Date.now().toString(36).toUpperCase().slice(-6),
+        codigoHCMadre: data.codigoVerificacion || data.firmaDigital?.codigoQR || "",
         medico: activeDoctorData?.nombre || currentUser?.name || "Dr.",
         medicoRM: activeDoctorData?.licencia || "",
         timestamp: new Date().toISOString(),
@@ -42533,6 +44689,7 @@ ${
               { id: "dx", label: "🩺 Diagnósticos" },
               { id: "plan", label: "📋 Plan" },
               { id: "formula", label: "💊 Fórmula" },
+              { id: "examenes_ev", label: "🔬 Exámenes" },
               { id: "incapacidad", label: "🏥 Incapacidad" },
                           { id: "concepto", label: "📄 Concepto Médico" },
             ].map((t) => (
@@ -42839,6 +44996,7 @@ ${
                           {
                             nombre: "",
                             presentacion: "",
+                            via: "",
                             dosis: "",
                             frecuencia: "",
                             duracion: "",
@@ -42907,6 +45065,32 @@ ${
                         className="p-1.5 border rounded text-xs"
                         placeholder="Presentación (mg, ml...)"
                       />
+                      <select
+                        value={med.via || ""}
+                        onChange={(e) => {
+                          const m = [...evolucionForm.formulaMedicamentos];
+                          m[i] = { ...m[i], via: e.target.value };
+                          setEvolucionForm((p) => ({
+                            ...p,
+                            formulaMedicamentos: m,
+                          }));
+                        }}
+                        className="p-1.5 border rounded text-xs"
+                      >
+                        <option value="">Vía...</option>
+                        <option>Oral</option>
+                        <option>Sublingual</option>
+                        <option>Intramuscular (IM)</option>
+                        <option>Intravenosa (IV)</option>
+                        <option>Subcutánea (SC)</option>
+                        <option>Tópica</option>
+                        <option>Oftálmica</option>
+                        <option>Ótica</option>
+                        <option>Inhalatoria</option>
+                        <option>Rectal</option>
+                        <option>Transdérmica</option>
+                        <option>Nasal</option>
+                      </select>
                       <input
                         value={med.dosis}
                         onChange={(e) => {
@@ -42966,6 +45150,64 @@ ${
             )}
 
             {/* TAB: Incapacidad */}
+            {evTab === "examenes_ev" && (
+              <div className="space-y-3">
+                <p className="text-[10px] font-black text-gray-500 uppercase">
+                  Exámenes y Procedimientos Solicitados
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    value={evolucionForm._examSearch || ""}
+                    onChange={(e) => setEvolucionForm(p => ({ ...p, _examSearch: e.target.value }))}
+                    className="flex-1 p-2 border border-purple-200 rounded-lg text-xs"
+                    placeholder="Buscar examen..."
+                  />
+                  <button
+                    onClick={() => {
+                      const v = (evolucionForm._examSearch || "").trim();
+                      if (!v) return;
+                      setEvolucionForm(p => ({
+                        ...p,
+                        examenesSolicitados: [...(p.examenesSolicitados || []), { nombre: v, urgente: false }],
+                        _examSearch: "",
+                      }));
+                    }}
+                    className="bg-purple-600 text-white px-3 py-2 rounded-lg text-xs font-bold"
+                  >
+                    + Agregar
+                  </button>
+                </div>
+                {(evolucionForm.examenesSolicitados || []).length === 0 && (
+                  <p className="text-center text-gray-400 text-xs py-6 border border-dashed rounded-xl">
+                    Sin exámenes solicitados. Escriba y agregue.
+                  </p>
+                )}
+                {(evolucionForm.examenesSolicitados || []).map((ex, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+                    <span className="text-teal-500 font-black text-sm">🔬</span>
+                    <span className="flex-1 text-xs font-semibold text-gray-800">{ex.nombre}</span>
+                    <label className="flex items-center gap-1 text-[10px] text-red-600 font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={ex.urgente || false}
+                        onChange={(e) => {
+                          const u = [...(evolucionForm.examenesSolicitados || [])];
+                          u[i] = { ...u[i], urgente: e.target.checked };
+                          setEvolucionForm(p => ({ ...p, examenesSolicitados: u }));
+                        }}
+                        className="accent-red-500"
+                      />
+                      Urgente
+                    </label>
+                    <button
+                      onClick={() => setEvolucionForm(p => ({ ...p, examenesSolicitados: (p.examenesSolicitados || []).filter((_, j) => j !== i) }))}
+                      className="text-red-400 hover:text-red-600 font-black text-sm"
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* TAB: Incapacidad (original) */}
             {evTab === "incapacidad" && (
               <div className="space-y-3">
                 <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-xl">
@@ -43146,14 +45388,40 @@ ${
               {evolucionForm.nuevoConcept && (
                 <button
                   onClick={() => {
-                    const certData = { ...data, conceptoMedico: evolucionForm.nuevoConcept, recomendaciones: evolucionForm.recomendaciones, fechaCierre: new Date().toISOString().split("T")[0] };
+                    const newCode = "SISO-EV-" + new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14) + "-" + Math.random().toString(36).substr(2, 8).toUpperCase();
+                    const certData = {
+                      ...data,
+                      conceptoAptitud: evolucionForm.nuevoConcept,
+                      recomendaciones: evolucionForm.recomendaciones || data.recomendaciones,
+                      analisisRestricciones: evolucionForm.recomendaciones || data.analisisRestricciones,
+                      fechaCierre: new Date().toISOString().split("T")[0],
+                      codigoVerificacion: newCode,
+                      _codigoHCOriginal: data.codigoVerificacion || "",
+                      _esEvolucion: true,
+                    };
+                    // Guardar evolución con nuevo código
+                    const nuevaEv = {
+                      id: Date.now(),
+                      codigoEvolucion: newCode,
+                      codigoHCMadre: data.codigoVerificacion || "",
+                      tipo: "certificado_evolucion",
+                      concepto: evolucionForm.nuevoConcept,
+                      fecha: new Date().toISOString().split("T")[0],
+                      medico: activeDoctorData?.nombre || currentUser?.name || "Dr.",
+                      timestamp: new Date().toISOString(),
+                    };
+                    setData((p) => ({
+                      ...p,
+                      evoluciones: [...(p.evoluciones || []), nuevaEv],
+                    }));
                     const html = _generarCertificadoHTMLNormalizado(certData, activeDoctorData || {}, activeSignature, companies.find((c) => c.id === currentUser?.empresaId) || {});
                     const win = window.open("", "_blank");
                     if (win) { win.document.write(html); win.document.close(); win.print(); }
+                    showAlert(`✅ Certificado de evolución generado.\nNuevo código: ${newCode}\nVinculado a HC original: ${data.codigoVerificacion || "—"}`);
                   }}
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg text-xs flex items-center justify-center gap-2"
                 >
-                  📄 Expedir Nuevo Certificado Médico
+                  📄 Expedir Nuevo Certificado (con nuevo código)
                 </button>
               )}
             </div>
@@ -43697,6 +45965,24 @@ body{font-family:Arial,sans-serif;margin:0;background:#f5f5f5}
     if (!privacidadAceptada)
       return <PrivacyModal onAccept={handleAceptarPrivacidad} />;
     if (view === "login") {
+      // ══ FIX: Mostrar carga mientras se recuperan usuarios de Supabase ══
+      if (!usersReady) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-teal-800 to-cyan-900 flex items-center justify-center font-sans p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-96 overflow-hidden animate-fade-in p-10 text-center">
+              <div className="w-16 h-16 bg-emerald-100 rounded-2xl mx-auto flex items-center justify-center mb-4">
+                <Cloud className="w-8 h-8 text-emerald-600 animate-pulse" />
+              </div>
+              <h2 className="text-lg font-black text-gray-800 mb-2">Conectando...</h2>
+              <p className="text-sm text-gray-500">Restaurando datos desde la nube</p>
+              <div className="mt-4 flex justify-center">
+                <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
+              </div>
+              <p className="text-[10px] text-gray-400 mt-3">Si tarda más de 10 segundos, verifique su conexión a internet.</p>
+            </div>
+          </div>
+        );
+      }
       // B-18: Intercepción 2FA - mostrar pantalla de verificación TOTP
       if (twoFAStep)
         return (
@@ -44341,7 +46627,7 @@ body{font-family:Arial,sans-serif;margin:0;background:#f5f5f5}
                       dxs
                         ? `<div style="margin-bottom:8px;"><p class="sec-title" style="color:#0d9488;">&#128203; Diagnósticos</p>${dxs}</div>`
                         : ""
-                    }${paracl}${remis}${recos}${conducta}</div>${sigBlock}`;
+                    }${conducta}${remis}</div>${recos ? `<div style="margin-top:8px;">${recos}</div>` : ""}${paracl ? `<div style="page-break-before:always;"><p style="font-size:7pt;color:#bbb;margin-bottom:8px;">— Hoja de Paraclínicos y Exámenes Solicitados —</p>${paracl}</div>` : ""}${sigBlock}`;
                   } else if (sectionId === "gn-derivaciones") {
                     accent = "#7c3aed";
                     const derivList = data.derivaciones || [];
@@ -45204,6 +47490,7 @@ body{padding-top:52px;}
   return (
     <>
       <PrintStyles />
+      <SecurityHeaders />
       {showPortalPublico ? (
         <PortalPublicoTrabajador
           sbUrl={_SB_URL}
@@ -45405,28 +47692,39 @@ body{padding-top:52px;}
       {/* Modal Confirm */}
       {confirmConfig && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
-          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full text-center animate-fade-in">
-            <AlertTriangle className="w-10 h-10 text-yellow-500 mx-auto mb-3" />
-            <p className="text-gray-800 font-bold mb-5 text-sm">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-md w-full animate-fade-in">
+            {!confirmConfig.buttons && <AlertTriangle className="w-10 h-10 text-yellow-500 mx-auto mb-3" />}
+            <p className="text-gray-800 font-bold mb-4 text-sm whitespace-pre-wrap">
               {confirmConfig.msg}
             </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmConfig(null)}
-                className="flex-1 py-2 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 text-sm"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  confirmConfig.onConfirm();
-                  setConfirmConfig(null);
-                }}
-                className="flex-1 py-2 bg-yellow-500 text-white rounded-xl font-bold hover:bg-yellow-600 text-sm"
-              >
-                Confirmar
-              </button>
-            </div>
+            {confirmConfig.buttons ? (
+              <div className="flex flex-col gap-2">
+                {confirmConfig.buttons.map((btn, idx) => (
+                  <button
+                    key={idx}
+                    onClick={btn.action}
+                    className={`w-full py-2.5 text-white rounded-xl font-bold text-sm transition ${btn.color}`}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { confirmConfig.onCancel?.(); setConfirmConfig(null); }}
+                  className="flex-1 py-2 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => { confirmConfig.onConfirm(); setConfirmConfig(null); }}
+                  className="flex-1 py-2 bg-yellow-500 text-white rounded-xl font-bold hover:bg-yellow-600 text-sm"
+                >
+                  Confirmar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -45537,6 +47835,8 @@ body{padding-top:52px;}
           </div>
         </div>
       )}
+      {/* Modal Evolución Clínica - GLOBAL (visible desde cualquier tab) */}
+      {renderEvolucionModal()}
       {/* Modal Prompt */}
       {promptConfig && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
@@ -45572,6 +47872,69 @@ body{padding-top:52px;}
                 className="flex-1 py-2 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 text-sm"
               >
                 Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal datos paciente — Vista secretaria */}
+      {showSecretariaPatientModal && (
+        <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) setShowSecretariaPatientModal(null); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-fade-in">
+            <div className="bg-gradient-to-r from-blue-700 to-indigo-700 px-6 py-4 text-white flex items-center justify-between">
+              <div>
+                <h2 className="font-black text-base">👤 Datos del Paciente</h2>
+                <p className="text-blue-100 text-xs mt-0.5">Vista secretaría — Solo datos administrativos</p>
+              </div>
+              <button onClick={() => setShowSecretariaPatientModal(null)} className="text-white/80 hover:text-white text-xl font-black">✕</button>
+            </div>
+            <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide mb-2">Datos Personales</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[["Nombres completos", showSecretariaPatientModal.nombres],["Documento", (showSecretariaPatientModal.docTipo||"CC")+" "+showSecretariaPatientModal.docNumero],["Edad", showSecretariaPatientModal.edad ? showSecretariaPatientModal.edad+" años" : "—"],["Género", showSecretariaPatientModal.genero],["Estado Civil", showSecretariaPatientModal.estadoCivil],["Grupo Sanguíneo", showSecretariaPatientModal.grupoSanguineo]].map(([label, value]) => (
+                    <div key={label} className="min-w-0">
+                      <p className="text-[9px] font-black text-gray-400 uppercase">{label}</p>
+                      <p className="text-xs font-bold text-gray-800 truncate">{value || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <p className="text-[10px] font-black text-blue-600 uppercase tracking-wide mb-2">Contacto</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[["Celular", showSecretariaPatientModal.celular||showSecretariaPatientModal.telefono],["Email", showSecretariaPatientModal.email],["Residencia", showSecretariaPatientModal.residencia],["EPS", showSecretariaPatientModal.eps]].map(([label, value]) => (
+                    <div key={label} className="min-w-0">
+                      <p className="text-[9px] font-black text-blue-400 uppercase">{label}</p>
+                      <p className="text-xs font-bold text-gray-800 truncate">{value || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-wide mb-2">Datos Laborales</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[["Empresa", showSecretariaPatientModal.empresaNombre||showSecretariaPatientModal.empresa],["Cargo", showSecretariaPatientModal.cargo],["ARL", showSecretariaPatientModal.arl],["Tipo Examen", showSecretariaPatientModal.tipoExamen],["Fecha Examen", showSecretariaPatientModal.fechaExamen],["Médico", usersList.find(u => u.user === showSecretariaPatientModal._medicoId)?.name || showSecretariaPatientModal._medicoId]].map(([label, value]) => (
+                    <div key={label} className="min-w-0">
+                      <p className="text-[9px] font-black text-indigo-400 uppercase">{label}</p>
+                      <p className="text-xs font-bold text-gray-800 truncate">{value || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {showSecretariaPatientModal.estadoHistoria === "Cerrada" && showSecretariaPatientModal.conceptoAptitud && (
+                <div className={`border-2 rounded-xl p-3 text-center ${showSecretariaPatientModal.conceptoAptitud.toLowerCase().includes("no apto") ? "bg-red-50 border-red-300" : "bg-emerald-50 border-emerald-300"}`}>
+                  <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Concepto de Aptitud</p>
+                  <p className="text-xs font-black text-emerald-700">{showSecretariaPatientModal.conceptoAptitud}</p>
+                  <p className="text-[9px] text-gray-400 mt-1">Código: {showSecretariaPatientModal.codigoVerificacion || "—"}</p>
+                </div>
+              )}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+                <span className="text-base flex-shrink-0">🔒</span>
+                <p className="text-xs text-amber-700 leading-relaxed"><strong>Ficha clínica restringida.</strong> Solo el médico tratante puede abrir el contenido clínico.</p>
+              </div>
+              <button onClick={() => { const p = showSecretariaPatientModal; setShowSecretariaPatientModal(null); setAgendaForm(prev => ({...prev, nombre: p.nombres||"", docTipo: p.docTipo||"CC", docNumero: p.docNumero||"", celular: p.celular||p.telefono||"", empresa: p.empresaNombre||p.empresa||"", cargo: p.cargo||"", medicoId: p._medicoId||prev.medicoId||"", eps: p.eps||"", _busquedaQuery: p.nombres||""})); goTo("agenda"); }} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-black flex items-center justify-center gap-2 transition">
+                📅 Agendar este paciente
               </button>
             </div>
           </div>
@@ -45765,4 +48128,9 @@ body{padding-top:52px;}
       )}
     </>
   );
+}
+
+// ── Export: App envuelta en ErrorBoundary ──
+export default function App() {
+  return React.createElement(AppErrorBoundary, null, React.createElement(AppInner));
 }
