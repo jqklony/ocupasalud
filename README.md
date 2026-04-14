@@ -1,2 +1,0 @@
-# ocupasalud
-Created with CodeSandbox
